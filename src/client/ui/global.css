@@ -1,0 +1,32 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #05060f;
+  color: #e8ecff;
+  font-family: system-ui, sans-serif;
+}
+
+#game {
+  position: fixed;
+  inset: 0;
+}
+
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hud {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgb(10 14 35 / 80%);
+  pointer-events: auto;
+}
