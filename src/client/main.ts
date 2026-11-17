@@ -1,6 +1,7 @@
 import { effect } from "@preact/signals";
 import { h, render } from "preact";
 import { log } from "../shared/log";
+import { createAchievementTracker } from "./achievements";
 import { createActions } from "./actions";
 import { audio } from "./audio/audio";
 import { attachClickSounds, createGameSounds } from "./audio/gameSounds";
@@ -25,12 +26,14 @@ async function main(): Promise<void> {
   const platform = createPlatform();
   const actions = createActions(bridge, platform);
   const sounds = createGameSounds();
+  const achievements = createAchievementTracker(platform);
 
   bridge.onMessage((message) => {
     applyWorkerMessage(message);
     if (message.type === "init") renderer.setMatch(message.init);
     sounds(message);
     actions.onWorkerMessage(message);
+    achievements(message);
   });
 
   // Browsers start audio only after a user gesture.

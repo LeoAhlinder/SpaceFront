@@ -181,6 +181,19 @@ export const strings = {
   replayInSync: "The match played out exactly as recorded.",
   watchingReplay: "Watching a replay",
 
+  // Achievements (shown by Steam; the same text goes into the Steamworks partner site)
+  achievements: {
+    TUTORIAL_DONE: { name: "First Steps", description: "Finish the tutorial." },
+    FIRST_SPACEPORT: { name: "Liftoff", description: "Finish your first Spaceport." },
+    TWO_WORLDS: { name: "Interplanetary", description: "Hold land on two worlds at once." },
+    SUN_BASE: { name: "Close to the Fire", description: "Found a Sun Base in the Corona." },
+    SOLAR_SIPHON: { name: "Drinking Sunlight", description: "Build a Solar Siphon." },
+    WARHEAD: { name: "Point of No Return", description: "Fire an Antimatter Warhead." },
+    VICTORY: { name: "Master of the System", description: "Win a match." },
+    VICTORY_HARD: { name: "Against the Odds", description: "Win a match on Hard or Impossible." },
+    VICTORY_IMPOSSIBLE: { name: "Impossible", description: "Win a match on Impossible." },
+  },
+
   // Settings
   audio: "Audio",
   masterVolume: "Master volume",
