@@ -2,13 +2,22 @@
  * The core promise of the simulation: same seed + same commands ⇒ same state.
  * Runs a match twice and compares state hashes every 50 ticks.
  *
- * Until real systems exist (M0.3), a test system stands in for gameplay: it
- * uses the world RNG to claim tiles and change faction numbers, so the RNG,
- * grids and factions all feed into the hash.
+ * The first tests use a stand-in system that claims random tiles; the scripted
+ * match at the bottom runs the real systems (spawn, population, attacks).
  */
 import { describe, expect, it } from "vitest";
-import type { MatchConfig, System, World } from "../../src/core";
-import { addFaction, createWorld, factionId, hashWorld, runTick } from "../../src/core";
+import type { Command, MatchConfig, System, World } from "../../src/core";
+import {
+  addFaction,
+  createWorld,
+  factionId,
+  hashWorld,
+  isOwnableTerrain,
+  queueCommand,
+  Rng,
+  runTick,
+  Terrain,
+} from "../../src/core";
 
 const HASH_EVERY = 50;
 const TICKS = 1_000;
@@ -60,5 +69,83 @@ describe("determinism", () => {
       return hashWorld(world);
     };
     expect(run()).toBe(run());
+  });
+});
+
+/**
+ * A scripted match through the real systems: six factions spawn, then attack
+ * neutral land and each other on a schedule. Terrain is painted from the seed.
+ */
+function playScripted(seed: number): { hashes: number[]; world: World; rejected: number } {
+  const world = createWorld({ seed, difficulty: "normal", bodies: [{ radius: 60 }] });
+  const grid = world.grids[0]!;
+  const paint = Rng.fromSeed(seed, 99);
+  for (let i = 0; i < grid.size; i++) {
+    if (!grid.isUsable(i)) continue;
+    const roll = paint.nextInt(100);
+    grid.terrain[i] =
+      roll < 5
+        ? Terrain.Ocean
+        : roll < 20
+          ? Terrain.Mountains
+          : roll < 35
+            ? Terrain.Highlands
+            : Terrain.Plains;
+  }
+
+  const spots: [number, number][] = [
+    [30, 60],
+    [90, 60],
+    [60, 30],
+    [60, 90],
+    [40, 40],
+    [80, 80],
+  ];
+  const script: { tick: number; command: Command }[] = [];
+  spots.forEach(([x, y], i) => {
+    const f = addFaction(world, `Bot ${i + 1}`, "bot").id;
+    let tile = grid.index(x, y);
+    while (!isOwnableTerrain(grid.terrain[tile]!)) tile++;
+    script.push({ tick: 0, command: { type: "spawn", faction: f, grid: grid.id, tile } });
+    for (let t = 20 + i * 7; t < 2_000; t += 90) {
+      const [tx, ty] = spots[(i + 1 + Math.floor(t / 90)) % spots.length]!;
+      script.push({
+        tick: t,
+        command: {
+          type: "attack",
+          faction: f,
+          grid: grid.id,
+          // Aim halfway to another spawn: neutral land early, a neighbor's land later.
+          tile: grid.index(Math.floor((x + tx) / 2), Math.floor((y + ty) / 2)),
+          ratioPct: 35,
+        },
+      });
+    }
+  });
+  for (const { tick, command } of script) queueCommand(world, command, tick);
+
+  const hashes: number[] = [];
+  let rejected = 0;
+  for (let t = 0; t < 2_000; t++) {
+    rejected += runTick(world).rejected.length;
+    if (world.tick % HASH_EVERY === 0) hashes.push(hashWorld(world));
+  }
+  return { hashes, world, rejected };
+}
+
+describe("determinism: scripted match through the real systems", () => {
+  it("produces identical hashes every 50 ticks across two runs", () => {
+    const first = playScripted(777);
+    const second = playScripted(777);
+    expect(second.hashes).toEqual(first.hashes);
+  });
+
+  it("actually plays: factions expand and fight", () => {
+    const { world, rejected } = playScripted(777);
+    const alive = world.factions.filter((f) => f.alive);
+    const totalTiles = world.factions.reduce((sum, f) => sum + f.tileCount, 0);
+    expect(alive.length).toBeGreaterThan(1);
+    expect(rejected).toBeLessThan(100); // most scripted commands are valid
+    expect(totalTiles).toBeGreaterThan(world.grids[0]!.usableCount / 2);
   });
 });

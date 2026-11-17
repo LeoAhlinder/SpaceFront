@@ -28,11 +28,11 @@ How to read the tasks: each one is roughly one PR. `☐` = not started.
 
 ### M0.3 Territory gameplay
 
-- ☐ Commands: `spawn`, `attack`, `setRatio`; `CommandQueue`; `validateCommand`
-- ☐ `populationSystem`: growth based on territory size, population cap, troops/workers split
-- ☐ `attackSystem`: frontier-based spreading into neutral land and enemy land, troop costs, attack end conditions
-- ☐ Terrain types with different expansion costs (plains, mountains, ice, ocean). On Earth, oceans can't be owned.
-- ☐ Unit tests for each system + a determinism test with scripted attacks
+- ☑ Commands: `spawn`, `attack`, `setRatio`; `CommandQueue`; `validateCommand`
+- ☑ `populationSystem`: growth based on territory size, population cap, troops/workers split
+- ☑ `attackSystem`: frontier-based spreading into neutral land and enemy land, troop costs, attack end conditions
+- ☑ Terrain types with different expansion costs (plains, mountains, ice, ocean). On Earth, oceans can't be owned.
+- ☑ Unit tests for each system + a determinism test with scripted attacks
 
 ### M0.4 Earth map
 

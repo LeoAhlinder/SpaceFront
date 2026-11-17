@@ -51,7 +51,7 @@ These are the most important rules in the project. Breaking them causes desyncs 
 
 ### 3.3 State and systems
 
-- `World` is the single source of truth. No module-level mutable state in core (no caches outside `World`).
+- `World` is the single source of truth. No module-level mutable state in core (no caches outside `World`). The one exception is scratch buffers (e.g. the `out` array for `neighbors`), which are overwritten on every use and never carry data between calls.
 - A system is a function `(world, ctx) => void` in its own file under `core/systems/`. It does one job.
 - State changes only happen inside systems or `applyCommands`. AI only **queues commands**.
 - Every state change that the client must see is recorded in the delta (`ctx.delta`). A missing delta record shows up as a rendering bug, so the delta tests check for it.

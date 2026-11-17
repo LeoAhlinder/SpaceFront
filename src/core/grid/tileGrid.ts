@@ -26,4 +26,7 @@ export interface TileGrid {
 
   /** True if the tile is part of the surface (not a padding/space slot). */
   isUsable(tile: number): boolean;
+
+  /** Cheap integer distance between two tiles (in steps), for priorities, not pathing. */
+  distance(a: number, b: number): number;
 }

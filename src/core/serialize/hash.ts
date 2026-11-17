@@ -20,6 +20,8 @@ export function hashWorld(world: World): number {
     h.string(f.name);
     h.int(FACTION_KIND_CODE[f.kind]);
     h.int(f.alive ? 1 : 0);
+    h.int(f.hasSpawned ? 1 : 0);
+    h.int(f.troopRatioPct);
     h.int(f.troops);
     h.int(f.workers);
     h.int(f.solars);
@@ -34,6 +36,20 @@ export function hashWorld(world: World): number {
     h.words(g.terrain);
   }
 
+  h.int(world.nextAttackId);
+  h.int(world.attacks.length);
+  for (const a of world.attacks) {
+    h.int(a.id);
+    h.int(a.attacker);
+    h.int(a.target);
+    h.int(a.grid);
+    h.int(a.troops);
+    h.int(a.focusTile);
+    h.ints(a.frontier.priorities);
+    h.ints(a.frontier.tiles);
+  }
+
+  // world.pending (queued commands) is input, not state, so it isn't hashed.
   return h.digest();
 }
 
@@ -68,6 +84,12 @@ class Hasher {
   words(array: ArrayLike<number>): void {
     this.mix(array.length);
     for (let i = 0; i < array.length; i++) this.mix(array[i]!);
+  }
+
+  /** A list of safe integers (may be negative or above 32 bits). */
+  ints(array: readonly number[]): void {
+    this.mix(array.length);
+    for (const n of array) this.int(n);
   }
 
   string(s: string): void {

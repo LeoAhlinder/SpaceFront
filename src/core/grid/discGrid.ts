@@ -65,6 +65,14 @@ export class DiscGrid implements TileGrid {
     return tile >= 0 && tile < this.size && this.terrain[tile] !== Terrain.Space;
   }
 
+  /** Manhattan distance, which matches the 4-neighbor step count on open ground. */
+  distance(a: number, b: number): number {
+    const side = this.side;
+    return (
+      Math.abs((a % side) - (b % side)) + Math.abs(Math.floor(a / side) - Math.floor(b / side))
+    );
+  }
+
   neighbors(tile: number, out: Int32Array): number {
     const side = this.side;
     const x = tile % side;

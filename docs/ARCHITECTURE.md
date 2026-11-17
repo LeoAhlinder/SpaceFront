@@ -190,15 +190,9 @@ All input, from the human, the AI or (later) the network, is a command:
 ```ts
 type Command =
   | { type: "spawn"; faction: FactionId; grid: GridId; tile: number }
-  | {
-      type: "attack";
-      faction: FactionId;
-      target: FactionId;
-      grid: GridId;
-      tile: number;
-      ratio: number;
-    }
-  | { type: "setRatio"; faction: FactionId; troopRatio: number }
+  // Attacks whoever owns `tile` when the command applies (neutral land included).
+  | { type: "attack"; faction: FactionId; grid: GridId; tile: number; ratioPct: number }
+  | { type: "setRatio"; faction: FactionId; troopRatioPct: number }
   | { type: "build"; faction: FactionId; kind: StructureKind; grid: GridId; tile: number }
   | {
       type: "launch";
