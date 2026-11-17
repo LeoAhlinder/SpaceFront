@@ -15,6 +15,8 @@ export interface MatchSetup {
   readonly difficulty: Difficulty;
   /** Dev builds only (`?solars=N` in the URL): the player's starting Solars. */
   readonly devStartSolars?: number;
+  /** The tutorial: no nations, a few bots, no spawn phase, some starting Solars. */
+  readonly tutorial?: boolean;
 }
 
 /** Client → worker. */

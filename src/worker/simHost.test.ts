@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { FactionId, GridId } from "../core";
 import { createWorld } from "../core";
+import { BALANCE } from "../data/balance";
 import { LANDABLE_BODIES } from "../data/bodies";
 import type { MatchInit, WorkerMessage } from "../shared/messages";
 import type { HostEnv } from "./simHost";
@@ -101,6 +102,32 @@ describe("SimHost", () => {
     });
     host.step();
     expect(posted.filter((m) => m.type === "tick")).toHaveLength(1);
+  });
+
+  it("starts the tutorial without nations, with a few bots and some Solars", async () => {
+    const t = testHost();
+    t.host.handle({
+      type: "start",
+      setup: {
+        seed: 3,
+        mapId: "sol",
+        botCount: 40,
+        playerName: "Tester",
+        difficulty: "easy",
+        tutorial: true,
+      },
+    });
+    for (let i = 0; i < 50 && !t.posted.some((m) => m.type === "init"); i++) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const init = t.posted.find((m) => m.type === "init")?.init as MatchInit;
+    expect(init.factions.filter((f) => f.kind === "nation")).toHaveLength(0);
+    expect(init.factions.filter((f) => f.kind === "bot")).toHaveLength(BALANCE.tutorial.botCount);
+    expect(init.spawnPhaseTicks).toBe(0);
+    t.host.step();
+    const tick = t.posted.find((m) => m.type === "tick");
+    const delta = tick?.type === "tick" ? tick.delta : null;
+    expect(delta!.stats[5]).toBeGreaterThanOrEqual(BALANCE.tutorial.startSolars);
   });
 
   it("stops posting while paused", async () => {

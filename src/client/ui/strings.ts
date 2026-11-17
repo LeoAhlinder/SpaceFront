@@ -142,4 +142,101 @@ export const strings = {
   noticeWeaponHit: (weapon: string, world: string) => `A ${weapon} hit ${world}`,
   warshipsStat: (n: number) => `${n}`,
   warships: "Warships",
+
+  // Menus (M5)
+  newGame: "New game",
+  tutorial: "Tutorial",
+  tutorialTagline: "Learn to spawn, expand, build, launch and use the system view",
+  loadGame: "Load game",
+  replays: "Replays",
+  settings: "Settings",
+  back: "Back",
+  start: "Start",
+  resume: "Resume",
+  quitToMenu: "Quit to menu",
+  menu: "Menu",
+  paused: "Paused",
+  pausedHint: (key: string) => `Paused · ${key} to resume`,
+  restartNow: "Restart now",
+  saveGame: "Save game",
+
+  // Settings
+  audio: "Audio",
+  masterVolume: "Master volume",
+  musicVolume: "Music",
+  sfxVolume: "Sound effects",
+  graphics: "Graphics",
+  quality: { low: "Low (fast)", high: "High" } as Record<"low" | "high", string>,
+  qualityHint: "Low draws fewer stars and effects at a lower resolution · applies after a restart",
+  keys: "Keys",
+  keysHint: "Click a key, then press the new one (Esc cancels)",
+  pressKey: "Press a key…",
+  resetKeys: "Reset keys",
+  keyConflict: "This key is used twice",
+  keyActions: {
+    cancel: "Cancel / menu",
+    toggleSystemView: "System view",
+    buildSpaceport: "Spaceport",
+    buildHabitat: "Habitat",
+    launchLander: "Troop Lander",
+    launchSunBase: "Sun Base",
+    buildSolarSiphon: "Solar Siphon",
+    buildShield: "Shield Generator",
+    buildOrbitalDefense: "Orbital Defense",
+    buildLaunchSilo: "Launch Silo",
+    launchWarship: "Warship",
+    nextWarship: "Next Warship",
+    fireKinetic: "Kinetic Strike",
+    fireAntimatter: "Antimatter Warhead",
+    pause: "Pause",
+    quickSave: "Quick save",
+  } as Record<string, string>,
+
+  // Tutorial
+  tutorialTitle: (step: number, total: number) => `Tutorial · ${step} of ${total}`,
+  tutorialNext: "Next",
+  tutorialSkip: "Skip tutorial",
+  tutorialFinish: "Finish",
+  tutorialSteps: [
+    {
+      title: "Welcome to SpaceFront",
+      text: () =>
+        "You start on one world and conquer the solar system. This map is Earth: drag to move it, scroll to zoom.",
+    },
+    {
+      title: "Pick your start",
+      text: () =>
+        "Click on land (green, tan or gray) to place your first territory. Any world works, but stay on Earth for now.",
+    },
+    {
+      title: "Expand",
+      text: () =>
+        'Click neutral land next to your border to send troops into it. The "Attack with" slider sets how many go. Grow to 300 tiles.',
+    },
+    {
+      title: "Build a Spaceport",
+      text: (key: string) =>
+        `Press ${key} (or the Spaceport button), then click your own land. Structures cost Solars (☉), which your workers earn.`,
+    },
+    {
+      title: "Wait for it",
+      text: () =>
+        "The Spaceport is being built: it looks faded until it's done. Keep expanding meanwhile.",
+    },
+    {
+      title: "The system view",
+      text: (key: string) =>
+        `Press ${key} to zoom out to the whole solar system. Worlds move on their orbits; each icon is a map you can open.`,
+    },
+    {
+      title: "Launch a Troop Lander",
+      text: (key: string) =>
+        `Press ${key}, click a world's icon to open its map, then click land there. The lander carries the attack share of your troops.`,
+    },
+    {
+      title: "You're ready",
+      text: () =>
+        "Your lander is on its way. Next: Habitats grow your population, the Corona around the Sun pays the most, and Warships and weapons settle wars. Good luck!",
+    },
+  ],
 };

@@ -79,25 +79,39 @@ async function main(): Promise<void> {
     },
   );
 
-  attachKeys({
-    cancel: () => {
-      actions.cancel();
-      actions.select(null);
+  attachKeys(
+    {
+      // Esc leaves a mode first, then closes the diplomacy panel, then opens (or closes) the menu.
+      cancel: () => {
+        if (ui.gameMenu.value) {
+          if (ui.gameSettings.value) ui.gameSettings.value = false;
+          else actions.setGameMenu(false);
+        } else if (actions.cancel()) {
+          return;
+        } else if (ui.selected.value !== null) {
+          actions.select(null);
+        } else {
+          actions.setGameMenu(true);
+        }
+      },
+      toggleSystemView: actions.toggleSystemView,
+      buildSpaceport: () => actions.toggleMode("spaceport"),
+      buildHabitat: () => actions.toggleMode("habitat"),
+      launchLander: () => actions.toggleMode("launch"),
+      launchSunBase: () => actions.toggleMode("sunBase"),
+      buildSolarSiphon: () => actions.toggleMode("solarSiphon"),
+      buildShield: () => actions.toggleMode("shieldGenerator"),
+      buildOrbitalDefense: () => actions.toggleMode("orbitalDefense"),
+      buildLaunchSilo: () => actions.toggleMode("launchSilo"),
+      launchWarship: () => actions.toggleMode("warship"),
+      nextWarship: actions.nextWarship,
+      fireKinetic: () => actions.toggleMode("kineticStrike"),
+      fireAntimatter: () => actions.toggleMode("antimatterWarhead"),
+      pause: actions.togglePause,
+      quickSave: () => undefined,
     },
-    toggleSystemView: actions.toggleSystemView,
-    buildSpaceport: () => actions.toggleMode("spaceport"),
-    buildHabitat: () => actions.toggleMode("habitat"),
-    launchLander: () => actions.toggleMode("launch"),
-    launchSunBase: () => actions.toggleMode("sunBase"),
-    buildSolarSiphon: () => actions.toggleMode("solarSiphon"),
-    buildShield: () => actions.toggleMode("shieldGenerator"),
-    buildOrbitalDefense: () => actions.toggleMode("orbitalDefense"),
-    buildLaunchSilo: () => actions.toggleMode("launchSilo"),
-    launchWarship: () => actions.toggleMode("warship"),
-    nextWarship: actions.nextWarship,
-    fireKinetic: () => actions.toggleMode("kineticStrike"),
-    fireAntimatter: () => actions.toggleMode("antimatterWarhead"),
-  });
+    () => ui.capturingKey.value,
+  );
 
   if (import.meta.env.DEV) {
     // Dev builds only: a handle for play-testing and browser tests.

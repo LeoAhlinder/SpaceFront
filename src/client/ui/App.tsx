@@ -4,7 +4,6 @@ import type { FactionView, Mode } from "../store/clientStore";
 import { BALANCE } from "../../data/balance";
 import type { BodyDef } from "../../data/bodies";
 import { bodyById, modifierOf, structureCost } from "../../data/bodies";
-import { DIFFICULTIES, DIFFICULTY_IDS } from "../../data/difficulty";
 import { nationById } from "../../data/nations";
 import {
   dismissNotice,
@@ -17,50 +16,25 @@ import {
 } from "../store/clientStore";
 import { keyLabel } from "../input/keymap";
 import { formatCount } from "./format";
+import { GameMenu, MainMenu, PauseBanner } from "./Menus";
+import { TutorialPanel } from "./Tutorial";
 import { strings } from "./strings";
 
-/** Root UI: menu, loading screen, or the in-game HUD with an end overlay. */
+/** Root UI: menus, loading screen, or the in-game HUD with its menu and an end overlay. */
 export function App({ actions }: { actions: Actions }) {
   const phase = ui.phase.value;
   const me = ui.player.value;
   const lost = phase === "playing" && me !== null && !me.alive;
   return (
     <>
-      {phase === "menu" && <Menu onPlay={actions.startMatch} />}
+      {phase === "menu" && <MainMenu actions={actions} />}
       {phase === "loading" && <div class="center-note">{strings.loading}</div>}
       {(phase === "playing" || phase === "ended") && <Hud actions={actions} />}
-      {(phase === "ended" || lost) && <EndOverlay onPlay={actions.startMatch} />}
+      {(phase === "ended" || lost) && !ui.gameMenu.value && <EndOverlay actions={actions} />}
+      <GameMenu actions={actions} />
+      {ui.toast.value && <div class="toast">{ui.toast.value}</div>}
       {ui.error.value && <div class="error">{strings.error(ui.error.value)}</div>}
     </>
-  );
-}
-
-function Menu({ onPlay }: { onPlay: () => void }) {
-  const chosen = ui.difficulty.value;
-  return (
-    <div class="menu panel">
-      <h1>{strings.title}</h1>
-      <p>{strings.tagline}</p>
-      <div class="label">{strings.difficulty}</div>
-      <div class="difficulty" role="radiogroup" aria-label={strings.difficulty}>
-        {DIFFICULTY_IDS.map((d) => (
-          <button
-            key={d}
-            role="radio"
-            aria-checked={d === chosen}
-            class={d === chosen ? "active" : ""}
-            onClick={() => (ui.difficulty.value = d)}
-          >
-            {DIFFICULTIES[d].name}
-          </button>
-        ))}
-      </div>
-      <p class="hint">{DIFFICULTIES[chosen].description}</p>
-      <button class="primary" onClick={onPlay}>
-        {strings.play}
-      </button>
-      <p class="hint">{strings.menuHelp}</p>
-    </div>
   );
 }
 
@@ -70,6 +44,7 @@ function Hud({ actions }: { actions: Actions }) {
     <>
       <div class="top-center">
         <ViewBar actions={actions} />
+        <PauseBanner />
         <SpawnBanner />
         <ModeBanner />
         <Alerts actions={actions} />
@@ -83,6 +58,7 @@ function Hud({ actions }: { actions: Actions }) {
         <Requests actions={actions} />
         <Notices />
         <AlliesPanel actions={actions} />
+        <TutorialPanel />
       </div>
       <div class="bottom-bar panel">
         <Actions actions={actions} />
@@ -123,6 +99,9 @@ function ViewBar({ actions }: { actions: Actions }) {
       ) : (
         <span class="hint">{strings.systemHint}</span>
       )}
+      <button class="menu-button" onClick={() => actions.setGameMenu(true)}>
+        {strings.menu} ({keyLabel("cancel")})
+      </button>
     </div>
   );
 }
@@ -508,7 +487,7 @@ function Slider(props: {
   );
 }
 
-function EndOverlay({ onPlay }: { onPlay: () => void }) {
+function EndOverlay({ actions }: { actions: Actions }) {
   const winner = ui.winner.value;
   const goal = view.init?.winLandPct ?? 80;
   const me = view.init?.playerId ?? -1;
@@ -527,9 +506,14 @@ function EndOverlay({ onPlay }: { onPlay: () => void }) {
               ? strings.winnerText(winner.name, goal)
               : strings.defeatText}
       </p>
-      <button class="primary" onClick={onPlay}>
-        {strings.playAgain}
-      </button>
+      <div class="menu-row">
+        <button onClick={actions.quitToMenu}>{strings.quitToMenu}</button>
+        {!view.replay && (
+          <button class="primary" onClick={() => actions.startMatch()}>
+            {strings.playAgain}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

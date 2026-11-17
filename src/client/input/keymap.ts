@@ -19,6 +19,8 @@ export const DEFAULT_KEYMAP = {
   nextWarship: "p",
   fireKinetic: "k",
   fireAntimatter: "x",
+  pause: " ",
+  quickSave: "F5",
 } as const;
 
 export type KeyAction = keyof typeof DEFAULT_KEYMAP;

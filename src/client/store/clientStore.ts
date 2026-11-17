@@ -26,6 +26,8 @@ const ALERT_TICKS = 120;
 const OWNABLE_MIN = 2;
 
 export type Phase = "menu" | "loading" | "playing" | "ended";
+/** Which page of the main menu is open. */
+export type MenuScreen = "main" | "setup" | "settings" | "load" | "replays";
 export type ViewState =
   { readonly kind: "system" } | { readonly kind: "planet"; readonly grid: number };
 /** What a click on a map does besides spawning/attacking: build, launch, or fire. */
@@ -130,6 +132,20 @@ export interface Alert {
  */
 export const ui = {
   phase: signal<Phase>("menu"),
+  /** The main menu's page (while phase is "menu"). */
+  screen: signal<MenuScreen>("main"),
+  /** The in-game menu (pause, save, settings, quit) is open. */
+  gameMenu: signal(false),
+  /** The settings page is open over the game (from the in-game menu). */
+  gameSettings: signal(false),
+  /** The simulation is paused (in-game menu, or the pause key). */
+  paused: signal(false),
+  /** The settings page is waiting for a key to bind; game keys are ignored meanwhile. */
+  capturingKey: signal(false),
+  /** The tutorial's current step, or null outside the tutorial. */
+  tutorialStep: signal<number | null>(null),
+  /** A short message at the top of the screen (e.g. "Game saved"), or null. */
+  toast: signal<string | null>(null),
   tick: signal(0),
   spawnPhaseTicks: signal(0),
   player: signal<FactionView | null>(null),
@@ -274,6 +290,9 @@ function applyInit(init: MatchInit): void {
   const earth = init.grids.findIndex((g) => g.bodyId === "earth");
   ui.view.value = { kind: "planet", grid: Math.max(0, earth) };
   ui.phase.value = "playing";
+  ui.gameMenu.value = false;
+  ui.gameSettings.value = false;
+  ui.paused.value = false;
   view.lastTickAt = performance.now();
   publishFactions();
 }

@@ -18,6 +18,13 @@ export const BALANCE = {
     defaultBotCount: 40,
   },
 
+  /** The tutorial match: a quiet solar system with a few bots and no nations. */
+  tutorial: {
+    botCount: 8,
+    /** Starting Solars, so the first Spaceport comes quickly. */
+    startSolars: 2_000,
+  },
+
   spawn: {
     /** Tiles within this many steps of the spawn tile are claimed. */
     radius: 4,

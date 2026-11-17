@@ -10,7 +10,15 @@ const GIFT_PCT = 25;
 
 /** Everything the player can do, turned into view changes or messages for the simulation. */
 export interface Actions {
-  readonly startMatch: () => void;
+  /** Starts a new match with the chosen difficulty, or the tutorial. */
+  readonly startMatch: (options?: { readonly tutorial?: boolean }) => void;
+  /** Leaves the match for the main menu (the simulation stays paused until the next start). */
+  readonly quitToMenu: () => void;
+  /** Pauses or resumes the simulation. */
+  readonly setPaused: (paused: boolean) => void;
+  readonly togglePause: () => void;
+  /** Opens or closes the in-game menu (which pauses the game while open). */
+  readonly setGameMenu: (open: boolean) => void;
   readonly clickTile: (hit: TileHit) => void;
   readonly setTroopRatio: (pct: number) => void;
   readonly openSystem: () => void;
@@ -18,7 +26,8 @@ export interface Actions {
   readonly toggleSystemView: () => void;
   /** Turns a mode on, or off if it's already on. */
   readonly toggleMode: (mode: Exclude<Mode, "none">) => void;
-  readonly cancel: () => void;
+  /** Leaves the current mode or Warship selection; returns false if there was nothing to leave. */
+  readonly cancel: () => boolean;
   /**
    * A click in empty space or on a world's icon in the system view, while
    * placing a Warship or with one selected: launch it, or send it on patrol
@@ -82,10 +91,17 @@ export function createActions(bridge: SimBridge): Actions {
     ui.view.value = { kind: "system" };
   };
 
+  const setPaused = (paused: boolean) => {
+    ui.paused.value = paused;
+    bridge.send({ type: "pause", paused });
+  };
+
   return {
-    startMatch: () => {
+    startMatch: (options = {}) => {
       ui.phase.value = "loading";
       ui.error.value = null;
+      ui.tutorialStep.value = options.tutorial ? 0 : null;
+      view.replay = false;
       bridge.send({
         type: "start",
         setup: {
@@ -93,10 +109,35 @@ export function createActions(bridge: SimBridge): Actions {
           mapId: "sol",
           botCount: BALANCE.match.defaultBotCount,
           playerName: "You",
-          difficulty: ui.difficulty.value,
+          difficulty: options.tutorial ? "easy" : ui.difficulty.value,
+          ...(options.tutorial && { tutorial: true }),
           ...devStartSolars(),
         },
       });
+    },
+
+    quitToMenu: () => {
+      setPaused(true);
+      ui.gameMenu.value = false;
+      ui.gameSettings.value = false;
+      ui.tutorialStep.value = null;
+      ui.mode.value = "none";
+      ui.selected.value = null;
+      ui.screen.value = "main";
+      ui.phase.value = "menu";
+    },
+
+    setPaused,
+    togglePause: () => {
+      if (ui.phase.value !== "playing" || ui.gameMenu.value) return;
+      setPaused(!ui.paused.value);
+    },
+
+    setGameMenu: (open) => {
+      if (ui.phase.value !== "playing" && ui.phase.value !== "ended") return;
+      ui.gameMenu.value = open;
+      ui.gameSettings.value = false;
+      if (ui.phase.value === "playing") setPaused(open);
     },
 
     /**
@@ -108,7 +149,7 @@ export function createActions(bridge: SimBridge): Actions {
     clickTile: (hit) => {
       const faction = player();
       const me = ui.player.value;
-      if (faction === null || !me || !me.alive || ui.phase.value !== "playing") return;
+      if (faction === null || !me || !me.alive || !canAct()) return;
       const grid = hit.grid as GridId;
       const mode = ui.mode.value;
       if (me.tileCount === 0) {
@@ -155,7 +196,7 @@ export function createActions(bridge: SimBridge): Actions {
     },
 
     toggleMode: (mode) => {
-      if (ui.phase.value !== "playing") return;
+      if (!canAct()) return;
       const needsPort = mode === "launch" || mode === "sunBase" || mode === "warship";
       if (needsPort && ui.readyPorts.value === 0) return;
       const isWeapon = mode === "kineticStrike" || mode === "antimatterWarhead";
@@ -168,13 +209,15 @@ export function createActions(bridge: SimBridge): Actions {
     },
 
     cancel: () => {
+      const had = ui.mode.value !== "none" || ui.selectedWarship.value !== null;
       ui.mode.value = "none";
       ui.selectedWarship.value = null;
+      return had;
     },
 
     clickSpace: (point, grid) => {
       const faction = player();
-      if (faction === null || ui.phase.value !== "playing") return false;
+      if (faction === null || !canAct()) return false;
       const area = {
         x: Math.round(point.x),
         y: Math.round(point.y),
@@ -264,6 +307,11 @@ export function createActions(bridge: SimBridge): Actions {
       }
     },
   };
+}
+
+/** The player may give orders: in a running, unpaused match that isn't a replay. */
+function canAct(): boolean {
+  return ui.phase.value === "playing" && !ui.paused.value && !view.replay;
 }
 
 const BUILD_MODES = [

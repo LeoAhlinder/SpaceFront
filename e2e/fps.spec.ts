@@ -5,7 +5,8 @@ test("frame rate during a running match", async ({ page }) => {
   test.skip(!process.env["SF_FPS"], "set SF_FPS=1 to run");
   test.setTimeout(120_000);
   await page.goto("/");
-  await page.getByRole("button", { name: "Play" }).click();
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await page.getByRole("button", { name: "Start" }).click();
   await expect(page.locator(".view-bar")).toContainText("Earth");
   await page.waitForTimeout(60_000);
   for (const view of ["Earth", "System"]) {

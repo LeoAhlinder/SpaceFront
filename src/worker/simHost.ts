@@ -89,7 +89,8 @@ export class SimHost {
         bodyId: b.id,
       })),
       corona: true,
-      spawnPhaseTicks: BALANCE.match.spawnPhaseTicks,
+      // The tutorial lets the player read before spawning: no timed spawn phase.
+      spawnPhaseTicks: setup.tutorial ? 0 : BALANCE.match.spawnPhaseTicks,
     };
     const world = createWorld(config, new Map(maps.map((m) => [m.id, m])));
     trackChanges(world);
@@ -97,9 +98,11 @@ export class SimHost {
     this.playerId = player.id;
     // Dev builds only (?solars=N): a head start for play-testing late-game features.
     if (setup.devStartSolars !== undefined) player.solars = setup.devStartSolars;
+    if (setup.tutorial) player.solars = BALANCE.tutorial.startSolars;
     const earth = maps.find((m) => m.id === "earth");
-    if (earth) addNations(world, setup.difficulty, earth.regions);
-    const homes = botHomes(world, setup.botCount, setup.seed);
+    if (earth && !setup.tutorial) addNations(world, setup.difficulty, earth.regions);
+    const botCount = setup.tutorial ? BALANCE.tutorial.botCount : setup.botCount;
+    const homes = botHomes(world, botCount, setup.seed);
     homes.forEach((grid, i) => addBot(world, `Bot ${i + 1}`, grid));
     this.world = world;
     this.paused = false;

@@ -438,3 +438,127 @@ button.build .cost {
     grid-template-columns: repeat(3, auto);
   }
 }
+
+/* Menus (M5) */
+.menu {
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+.menu.wide {
+  max-width: min(560px, calc(100vw - 32px));
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.menu-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 16px auto 0;
+  width: min(240px, 100%);
+}
+
+.menu-buttons button,
+.menu-buttons button.primary {
+  margin: 0;
+  padding: 10px 16px;
+  font-size: 15px;
+}
+
+.menu-row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.menu-row button.primary {
+  margin-top: 0;
+}
+
+.settings {
+  text-align: left;
+}
+
+.settings h1 {
+  text-align: center;
+}
+
+.settings .slider {
+  display: flex;
+  flex-direction: column;
+  margin: 6px 0;
+}
+
+.keys {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 4px 16px;
+  margin-top: 6px;
+}
+
+.key-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+button.key {
+  min-width: 64px;
+  padding: 3px 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+button.key.conflict {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+button.link {
+  border: none;
+  background: none;
+  color: var(--muted);
+  text-decoration: underline;
+}
+
+button.inline {
+  margin-left: 8px;
+  padding: 2px 8px;
+}
+
+.menu-button {
+  margin-left: 4px;
+}
+
+.tutorial {
+  position: static;
+  width: 100%;
+  box-sizing: border-box;
+  border-color: rgb(41 212 255 / 45%);
+  white-space: normal;
+}
+
+.tutorial p {
+  margin: 6px 0;
+  line-height: 1.4;
+}
+
+.toast {
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: rgb(107 227 122 / 18%);
+  border: 1px solid rgb(107 227 122 / 50%);
+}
+
+/* Narrow windows: drop the view bar's long hint so it doesn't run under the stats. */
+@media (max-width: 1200px) {
+  .view-bar .hint {
+    display: none;
+  }
+}
