@@ -9,10 +9,14 @@ import { factionId, gridId, MAX_FACTION_ID, NEUTRAL } from "../ids";
 import type { TerrainMap } from "../map/terrainMap";
 import { Rng } from "../math/rng";
 import type { Point } from "../space/space";
+import type { DifficultyId } from "../../data/difficulty";
+import type { NationState } from "../ai/nation";
+import type { Diplomacy, GameEvent } from "./diplomacy";
+import { createDiplomacy } from "./diplomacy";
 import type { FrontierHeap } from "./frontierHeap";
 import type { TileRef } from "./tileRef";
 
-export type Difficulty = "easy" | "normal" | "hard" | "impossible";
+export type Difficulty = DifficultyId;
 
 export type FactionKind = "neutral" | "player" | "bot" | "nation";
 
@@ -77,6 +81,27 @@ export interface Faction {
   readonly tiles: TileRef[];
   /** Target percent of population that are troops (1–100). */
   troopRatioPct: number;
+  /**
+   * Economy bonuses in percent (100 = none): nations get theirs from the
+   * difficulty (data/difficulty.ts); players and bots have none.
+   */
+  readonly bonus: FactionBonus;
+  /** Marked as a traitor (for breaking an alliance) until this tick; 0 = never. */
+  traitorUntil: number;
+}
+
+/** Percent multipliers on a faction's economy (100 = normal). */
+export interface FactionBonus {
+  /** Population growth. */
+  growthPct: number;
+  /** All Solars income except trade. */
+  incomePct: number;
+  /** Construction time (below 100 builds faster). */
+  buildTimePct: number;
+  /** Extra steps of land claimed at spawn. */
+  spawnRadius: number;
+  /** Starting troops and workers. */
+  startPopPct: number;
 }
 
 /** AI state for one bot faction. */
@@ -150,11 +175,13 @@ export interface ChangeLog {
   readonly structures: number[];
   readonly shipsLaunched: number[];
   readonly shipsLanded: number[];
+  /** Diplomacy and other events for the UI, in the order they happened. */
+  readonly events: GameEvent[];
 }
 
 /**
  * The complete simulation state: the single source of truth (ARCHITECTURE.md §4.3).
- * Alliances and combat units are added by the milestones that need them.
+ * Combat units are added by the milestone that needs them (M4).
  */
 export interface World {
   /** Number of ticks completed so far. */
@@ -175,6 +202,10 @@ export interface World {
   readonly tileSlots: Int32Array[];
   /** Bot AI states, in creation order. */
   readonly bots: BotState[];
+  /** Nation (and colony) AI states, in creation order. */
+  readonly nations: NationState[];
+  /** Alliances, alliance requests and embargoes. */
+  readonly diplomacy: Diplomacy;
   /** Running attacks, in creation order. */
   attacks: Attack[];
   nextAttackId: number;
@@ -220,6 +251,8 @@ export function createWorld(
     factions: [],
     tileSlots: all.map((g) => new Int32Array(g.size).fill(-1)),
     bots: [],
+    nations: [],
+    diplomacy: createDiplomacy(),
     attacks: [],
     nextAttackId: 1,
     gridBodies: config.bodies.map((b) => b.bodyId ?? null),
@@ -316,6 +349,8 @@ export function addFaction(world: World, name: string, kind: FactionKind): Facti
     gridTiles: world.tileSlots.map(() => 0),
     tiles: [],
     troopRatioPct: BALANCE.population.defaultTroopRatioPct,
+    bonus: { growthPct: 100, incomePct: 100, buildTimePct: 100, spawnRadius: 0, startPopPct: 100 },
+    traitorUntil: 0,
   };
   world.factions.push(faction);
   return faction;

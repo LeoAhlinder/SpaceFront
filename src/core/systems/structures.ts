@@ -44,19 +44,18 @@ export function buildCost(
 
 /** Places a structure (validated and paid for before). It works once construction finishes. */
 export function applyBuild(world: World, command: BuildCommand): Structure {
-  world.factions[command.faction]!.solars -= buildCost(
-    world,
-    command.faction,
-    command.kind,
-    command.grid,
-  );
+  const faction = world.factions[command.faction]!;
+  faction.solars -= buildCost(world, command.faction, command.kind, command.grid);
   const structure: Structure = {
     id: world.structures.length,
     kind: command.kind,
     owner: command.faction,
     grid: command.grid,
     tile: command.tile,
-    buildTicksLeft: BALANCE.structures[command.kind].buildTicks,
+    buildTicksLeft: Math.max(
+      1,
+      Math.floor((BALANCE.structures[command.kind].buildTicks * faction.bonus.buildTimePct) / 100),
+    ),
     nextTradeTick: -1,
   };
   world.structures.push(structure);

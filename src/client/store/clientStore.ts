@@ -1,12 +1,23 @@
 import { signal } from "@preact/signals";
-import type { FactionKind, ShipView, StructureView, TickDelta } from "../../core";
+import type {
+  Difficulty,
+  DiplomacySnapshot,
+  FactionKind,
+  GameEvent,
+  ShipView,
+  StructureView,
+  TickDelta,
+} from "../../core";
+import { BALANCE } from "../../data/balance";
 import { bodyById } from "../../data/bodies";
 import type { MatchInit, WorkerMessage } from "../../shared/messages";
 import { factionColor } from "../render/colors";
 import { strings } from "../ui/strings";
 
 /** Must match core's FACTION_STATS_STRIDE (client can't import core values). */
-const STATS_STRIDE = 8;
+const STATS_STRIDE = 9;
+/** Diplomacy notices disappear after this many ticks. */
+const NOTICE_TICKS = 150;
 const LEADERBOARD_SIZE = 10;
 /** Alerts disappear after this many ticks. */
 const ALERT_TICKS = 120;
@@ -32,6 +43,31 @@ export interface FactionView {
   solars: number;
   coronaTroops: number;
   coronaTiles: number;
+  /** Marked as a traitor until this tick (0 = never). */
+  traitorUntil: number;
+  /** Nations and colonies: their nation in data/nations.ts. */
+  readonly nationId?: string;
+  /** Colonies: their home nation's faction id. */
+  readonly homeId?: number;
+}
+
+/** A diplomacy message for the player, e.g. "China asks for an alliance". */
+export interface Notice {
+  readonly id: number;
+  readonly text: string;
+  readonly untilTick: number;
+}
+
+/** The player's diplomatic situation, rebuilt whenever something diplomatic happens. */
+export interface Relations {
+  /** Factions allied with the player. */
+  readonly allies: readonly number[];
+  /** Alliance requests to the player that can still be accepted. */
+  readonly requests: readonly { readonly from: number; readonly untilTick: number }[];
+  /** Factions the player asked (still waiting for an answer). */
+  readonly asked: readonly number[];
+  /** Factions the player has an embargo on. */
+  readonly embargoes: readonly number[];
 }
 
 export interface Alert {
@@ -64,6 +100,12 @@ export const ui = {
   attackRatioPct: signal(30),
   /** Percent of population kept as troops (sent to the sim as setRatio). */
   troopRatioPct: signal(60),
+  /** Difficulty picked in the menu for the next match. */
+  difficulty: signal<Difficulty>("normal"),
+  /** Faction whose diplomacy panel is open, or null. */
+  selected: signal<number | null>(null),
+  relations: signal<Relations>({ allies: [], requests: [], asked: [], embargoes: [] }),
+  notices: signal<readonly Notice[]>([]),
 };
 
 /** Map state for the renderer: owners, structures and ships, updated in place. */
@@ -83,9 +125,28 @@ export const view = {
   ships: new Map<number, ShipView>(),
   /** When the last tick arrived (performance.now()), for smooth motion between ticks. */
   lastTickAt: 0,
+  /** Allied pairs (low × 65536 + high) and embargoes (from × 65536 + to). */
+  alliances: new Set<number>(),
+  embargoes: new Set<number>(),
+  /** Alliance requests (from × 65536 + to) and the last tick they can be accepted. */
+  requests: new Map<number, number>(),
 };
 
+const pairKey = (a: number, b: number) => (a < b ? a * 0x10000 + b : b * 0x10000 + a);
+const dirKey = (from: number, to: number) => from * 0x10000 + to;
+
+/** True if two factions are allies. */
+export function isAlly(a: number, b: number): boolean {
+  return a !== b && view.alliances.has(pairKey(a, b));
+}
+
+/** True if `from` has an embargo on `to`. */
+export function hasEmbargoOn(from: number, to: number): boolean {
+  return view.embargoes.has(dirKey(from, to));
+}
+
 let nextAlertId = 1;
+let nextNoticeId = 1;
 
 export function applyWorkerMessage(message: WorkerMessage): void {
   switch (message.type) {
@@ -119,7 +180,6 @@ function applyInit(init: MatchInit): void {
       f.id,
       {
         ...f,
-        color: factionColor(f.id, f.kind),
         alive: true,
         troops: 0,
         workers: 0,
@@ -127,9 +187,16 @@ function applyInit(init: MatchInit): void {
         solars: 0,
         coronaTroops: 0,
         coronaTiles: 0,
+        traitorUntil: 0,
+        color: factionColor(f.id, f.kind, f.nationId, f.homeId !== undefined),
       },
     ]),
   );
+  view.requests = new Map();
+  applySnapshot(init.diplomacy);
+  ui.notices.value = [];
+  ui.selected.value = null;
+  publishRelations(0);
   ui.spawnPhaseTicks.value = init.spawnPhaseTicks;
   ui.tick.value = 0;
   ui.winner.value = null;
@@ -166,7 +233,11 @@ function applyDelta(delta: TickDelta): void {
     f.solars = stats[o + 5]!;
     f.coronaTroops = stats[o + 6]!;
     f.coronaTiles = stats[o + 7]!;
+    f.traitorUntil = stats[o + 8]!;
   }
+  if (delta.diplomacy) applySnapshot(delta.diplomacy);
+  for (const e of delta.events) applyEvent(e, delta.tick);
+  if (delta.events.length > 0 || hasExpired(delta.tick)) publishRelations(delta.tick);
   for (const s of delta.structures) view.structures.set(s.id, s);
   if (delta.structures.length > 0) {
     const me = view.init?.playerId;
@@ -182,6 +253,9 @@ function applyDelta(delta: TickDelta): void {
 
   ui.tick.value = delta.tick;
   view.lastTickAt = performance.now();
+  if (ui.notices.value.some((n) => n.untilTick <= delta.tick)) {
+    ui.notices.value = ui.notices.value.filter((n) => n.untilTick > delta.tick);
+  }
   if (ui.alerts.value.some((a) => a.untilTick <= delta.tick)) {
     ui.alerts.value = ui.alerts.value.filter((a) => a.untilTick > delta.tick);
   }
@@ -270,4 +344,87 @@ function publishFactions(): void {
 export function landShare(f: FactionView): number {
   const total = view.init?.ownableTiles ?? 0;
   return total === 0 ? 0 : f.tileCount / total;
+}
+
+function applySnapshot(snapshot: DiplomacySnapshot): void {
+  const pairs = (flat: readonly number[], key: (a: number, b: number) => number) => {
+    const out = new Set<number>();
+    for (let i = 0; i + 1 < flat.length; i += 2) out.add(key(flat[i]!, flat[i + 1]!));
+    return out;
+  };
+  view.alliances = pairs(snapshot.alliances, pairKey);
+  view.embargoes = pairs(snapshot.embargoes, dirKey);
+}
+
+/** Turns a diplomacy event into view state and, if it concerns the player, a notice. */
+function applyEvent(e: GameEvent, tick: number): void {
+  const me = view.init?.playerId;
+  const name = (id: number) => view.factions.get(id)?.name ?? `#${id}`;
+  switch (e.kind) {
+    case "allyRequest":
+      view.requests.set(dirKey(e.from, e.to), tick + BALANCE.diplomacy.requestTicks);
+      if (e.to === me) pushNotice(strings.noticeAllyRequest(name(e.from)), tick);
+      break;
+    case "allied":
+      view.requests.delete(dirKey(e.a, e.b));
+      view.requests.delete(dirKey(e.b, e.a));
+      if (e.a === me || e.b === me)
+        pushNotice(strings.noticeAllied(name(e.a === me ? e.b : e.a)), tick);
+      break;
+    case "allianceBroken":
+      if (e.other === me) pushNotice(strings.noticeBetrayed(name(e.by)), tick);
+      else if (e.by === me) pushNotice(strings.noticeYouBroke(name(e.other)), tick);
+      break;
+    case "gift":
+      if (e.to === me) pushNotice(strings.noticeGift(name(e.from), e.solars, e.troops), tick);
+      break;
+    case "embargo":
+      if (e.to === me) pushNotice(strings.noticeEmbargo(name(e.from), e.on), tick);
+      break;
+    case "signal":
+      if (e.to === me)
+        pushNotice(strings.noticeSignal(name(e.from), e.signal, name(e.about)), tick);
+      break;
+    case "independent":
+      if (me !== undefined && (isAlly(me, e.colony) || isAlly(me, e.home))) {
+        pushNotice(strings.noticeIndependent(name(e.colony)), tick);
+      }
+      break;
+  }
+}
+
+function pushNotice(text: string, tick: number): void {
+  const notice = { id: nextNoticeId++, text, untilTick: tick + NOTICE_TICKS };
+  ui.notices.value = [...ui.notices.value.slice(-4), notice];
+}
+
+export function dismissNotice(id: number): void {
+  ui.notices.value = ui.notices.value.filter((n) => n.id !== id);
+}
+
+/** True if a request shown to the player has run out since the last update. */
+function hasExpired(tick: number): boolean {
+  return ui.relations.value.requests.some((r) => r.untilTick < tick);
+}
+
+/** Rebuilds the player's relations from the view's diplomacy tables. */
+function publishRelations(tick: number): void {
+  const me = view.init?.playerId;
+  if (me === undefined) return;
+  const allies: number[] = [];
+  const requests: { from: number; untilTick: number }[] = [];
+  const asked: number[] = [];
+  const embargoes: number[] = [];
+  for (const f of view.factions.values()) {
+    if (f.id === me || !f.alive) continue;
+    if (isAlly(me, f.id)) allies.push(f.id);
+    if (hasEmbargoOn(me, f.id)) embargoes.push(f.id);
+    const incoming = view.requests.get(dirKey(f.id, me));
+    if (incoming !== undefined && incoming >= tick && !isAlly(me, f.id)) {
+      requests.push({ from: f.id, untilTick: incoming });
+    }
+    const outgoing = view.requests.get(dirKey(me, f.id));
+    if (outgoing !== undefined && outgoing >= tick && !isAlly(me, f.id)) asked.push(f.id);
+  }
+  ui.relations.value = { allies, requests, asked, embargoes };
 }

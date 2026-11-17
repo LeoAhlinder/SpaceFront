@@ -3,42 +3,15 @@
  * economy, trade, structures, ships, Sun Bases and siphons, for 3,000 ticks (5 minutes of game time). Must stay
  * deterministic and keep the simulation well inside its 100 ms tick budget.
  */
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import type { TerrainMap, World } from "../../src/core";
-import { addBot, createWorld, hashWorld, loadTerrainMap, runTick } from "../../src/core";
-import { LANDABLE_BODIES } from "../../src/data/bodies";
-import { botHomes } from "../../src/worker/simHost";
-
-const maps = new Map<string, TerrainMap>(
-  LANDABLE_BODIES.map((b) => {
-    const dir = new URL(`../../public/maps/${b.map!.mapId}/`, import.meta.url);
-    const map = loadTerrainMap(
-      new Uint8Array(readFileSync(new URL("terrain.bin", dir))),
-      JSON.parse(readFileSync(new URL("regions.json", dir), "utf8")),
-    );
-    return [map.id, map];
-  }),
-);
+import { hashWorld, runTick } from "../../src/core";
+import { populate, solarWorld } from "../support/solarMatch";
 
 const TICKS = 3_000;
 
 function play(seed: number) {
-  const world: World = createWorld(
-    {
-      seed,
-      difficulty: "normal",
-      bodies: LANDABLE_BODIES.map((b) => ({
-        width: b.map!.width,
-        height: b.map!.height,
-        mapId: b.map!.mapId,
-        bodyId: b.id,
-      })),
-      corona: true,
-    },
-    maps,
-  );
-  botHomes(world, 40, seed).forEach((grid, i) => addBot(world, `Bot ${i + 1}`, grid));
+  const world = solarWorld(seed);
+  populate(world, 40, false);
   const hashes: number[] = [];
   let slowest = 0;
   const start = performance.now();

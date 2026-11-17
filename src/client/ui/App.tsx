@@ -4,7 +4,17 @@ import type { FactionView } from "../store/clientStore";
 import { BALANCE } from "../../data/balance";
 import type { BodyDef } from "../../data/bodies";
 import { bodyById, modifierOf, structureCost } from "../../data/bodies";
-import { landShare, ownedCount, ui, view, worldName } from "../store/clientStore";
+import { DIFFICULTIES, DIFFICULTY_IDS } from "../../data/difficulty";
+import { nationById } from "../../data/nations";
+import {
+  dismissNotice,
+  isAlly,
+  landShare,
+  ownedCount,
+  ui,
+  view,
+  worldName,
+} from "../store/clientStore";
 import { KEYMAP } from "../input/keymap";
 import { formatCount } from "./format";
 import { strings } from "./strings";
@@ -26,10 +36,26 @@ export function App({ actions }: { actions: Actions }) {
 }
 
 function Menu({ onPlay }: { onPlay: () => void }) {
+  const chosen = ui.difficulty.value;
   return (
     <div class="menu panel">
       <h1>{strings.title}</h1>
       <p>{strings.tagline}</p>
+      <div class="label">{strings.difficulty}</div>
+      <div class="difficulty" role="radiogroup" aria-label={strings.difficulty}>
+        {DIFFICULTY_IDS.map((d) => (
+          <button
+            key={d}
+            role="radio"
+            aria-checked={d === chosen}
+            class={d === chosen ? "active" : ""}
+            onClick={() => (ui.difficulty.value = d)}
+          >
+            {DIFFICULTIES[d].name}
+          </button>
+        ))}
+      </div>
+      <p class="hint">{DIFFICULTIES[chosen].description}</p>
       <button class="primary" onClick={onPlay}>
         {strings.play}
       </button>
@@ -49,7 +75,15 @@ function Hud({ actions }: { actions: Actions }) {
         <Alerts actions={actions} />
       </div>
       {me && <StatsPanel me={me} />}
-      <Leaderboard />
+      <div class="right-column">
+        <Leaderboard actions={actions} />
+        <DiplomacyPanel actions={actions} />
+      </div>
+      <div class="left-column">
+        <Requests actions={actions} />
+        <Notices />
+        <AlliesPanel actions={actions} />
+      </div>
       <div class="bottom-bar panel">
         <Actions actions={actions} />
         <Slider
@@ -226,20 +260,173 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Leaderboard() {
-  const playerId = view.init?.playerId;
+function Leaderboard({ actions }: { actions: Actions }) {
+  const playerId = view.init?.playerId ?? -1;
+  const tick = ui.tick.value;
+  const allies = ui.relations.value.allies;
+  const selected = ui.selected.value;
   return (
     <div class="leaderboard panel">
       <div class="label">{strings.leaderboard}</div>
       <ol>
         {ui.leaderboard.value.map((f) => (
-          <li key={f.id} class={f.id === playerId ? "me" : ""}>
+          <li
+            key={f.id}
+            class={`${f.id === playerId ? "me" : ""} ${selected === f.id ? "selected" : ""}`}
+            onClick={() => actions.select(f.id)}
+          >
             <span class="swatch" style={{ background: cssColor(f.color) }} />
             <span class="name">{f.id === playerId ? strings.you : f.name}</span>
+            {allies.includes(f.id) && (
+              <span class="tag ally" title={strings.allied}>
+                ●
+              </span>
+            )}
+            {f.traitorUntil > tick && (
+              <span class="tag traitor" title={strings.traitor}>
+                ⚠
+              </span>
+            )}
             <span class="value">{(landShare(f) * 100).toFixed(1)}%</span>
           </li>
         ))}
       </ol>
+      <div class="hint">{strings.diplomacyHint}</div>
+    </div>
+  );
+}
+
+/** Diplomacy with the selected faction: alliance, gifts, embargo and quick signals. */
+function DiplomacyPanel({ actions }: { actions: Actions }) {
+  const id = ui.selected.value;
+  const f = id === null ? undefined : view.factions.get(id);
+  const me = ui.player.value;
+  if (!f || !me || ui.phase.value !== "playing") return null;
+  const rel = ui.relations.value;
+  const tick = ui.tick.value;
+  const allied = rel.allies.includes(f.id);
+  const theyAsked = rel.requests.some((r) => r.from === f.id);
+  const weAsked = rel.asked.includes(f.id);
+  const embargoed = rel.embargoes.includes(f.id);
+  const home = f.homeId !== undefined ? view.factions.get(f.homeId)?.name : undefined;
+  const who =
+    f.kind === "bot"
+      ? strings.bot
+      : home !== undefined
+        ? strings.colonyOf(home)
+        : f.nationId !== undefined
+          ? strings.nation(nationById(f.nationId).tier)
+          : "";
+  const giftSolars = Math.floor(me.solars / 4);
+  const giftTroops = Math.floor(me.troops / 4);
+  return (
+    <div class="diplomacy panel" aria-label={f.name}>
+      <div class="diplomacy-head">
+        <span class="swatch" style={{ background: cssColor(f.color) }} />
+        <strong>{f.name}</strong>
+        <button class="close" aria-label={strings.close} onClick={() => actions.select(null)}>
+          ×
+        </button>
+      </div>
+      <div class="hint">
+        {who}
+        {allied && <span class="tag ally"> · {strings.allied}</span>}
+        {f.traitorUntil > tick && <span class="tag traitor"> · {strings.traitor}</span>}
+        {embargoed && <span class="tag"> · {strings.embargoed}</span>}
+      </div>
+      {f.alive && (
+        <div class="diplomacy-actions">
+          {f.kind === "bot" ? (
+            <span class="hint">{strings.botsNeverAlly}</span>
+          ) : allied ? (
+            <button title={strings.breakWarning} onClick={() => actions.ally(f.id, "break")}>
+              {strings.breakAlliance}
+            </button>
+          ) : theyAsked ? (
+            <button class="good" onClick={() => actions.ally(f.id, "accept")}>
+              {strings.acceptAlliance}
+            </button>
+          ) : (
+            <button disabled={weAsked} onClick={() => actions.ally(f.id, "request")}>
+              {weAsked ? strings.asked : strings.askAlliance}
+            </button>
+          )}
+          {allied && (
+            <>
+              <button disabled={giftSolars < 1} onClick={() => actions.gift(f.id, "solars")}>
+                {strings.giftSolars(formatCount(giftSolars))}
+              </button>
+              <button disabled={giftTroops < 1} onClick={() => actions.gift(f.id, "troops")}>
+                {strings.giftTroops(formatCount(giftTroops))}
+              </button>
+            </>
+          )}
+          <button onClick={() => actions.embargo(f.id, !embargoed)}>
+            {embargoed ? strings.liftEmbargo : strings.embargo}
+          </button>
+          {!allied && f.kind !== "bot" && (
+            <button onClick={() => actions.signal("peace", f.id)}>{strings.signalPeace}</button>
+          )}
+          {!allied && rel.allies.length > 0 && (
+            <button onClick={() => actions.signal("attack", f.id)}>{strings.signalAttack}</button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Incoming alliance requests, with an Accept button each. */
+function Requests({ actions }: { actions: Actions }) {
+  return (
+    <>
+      {ui.relations.value.requests.map((r) => {
+        const f = view.factions.get(r.from);
+        if (!f) return null;
+        return (
+          <div key={r.from} class="request panel">
+            <span class="swatch" style={{ background: cssColor(f.color) }} />
+            <span class="name">{strings.noticeAllyRequest(f.name)}</span>
+            <button class="good" onClick={() => actions.ally(f.id, "accept")}>
+              {strings.acceptAlliance}
+            </button>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/** Recent diplomacy messages for the player; click one to dismiss it. */
+function Notices() {
+  return (
+    <>
+      {ui.notices.value.map((n) => (
+        <button key={n.id} class="notice" onClick={() => dismissNotice(n.id)}>
+          {n.text}
+        </button>
+      ))}
+    </>
+  );
+}
+
+/** The player's allies, and a Help! signal to all of them. */
+function AlliesPanel({ actions }: { actions: Actions }) {
+  const allies = ui.relations.value.allies;
+  if (allies.length === 0) return null;
+  return (
+    <div class="allies panel">
+      <div class="label">{strings.allies}</div>
+      {allies.map((id) => {
+        const f = view.factions.get(id);
+        return f ? (
+          <button key={id} class="ally-row" onClick={() => actions.select(id)}>
+            <span class="swatch" style={{ background: cssColor(f.color) }} />
+            <span class="name">{f.name}</span>
+          </button>
+        ) : null;
+      })}
+      <button onClick={() => actions.signal("help", 0)}>{strings.signalHelp}</button>
     </div>
   );
 }
@@ -271,16 +458,21 @@ function Slider(props: {
 function EndOverlay({ onPlay }: { onPlay: () => void }) {
   const winner = ui.winner.value;
   const goal = view.init?.winLandPct ?? 80;
+  const me = view.init?.playerId ?? -1;
   const won = winner?.kind === "player";
+  // Allies share a win (GAMEPLAY_PLAN.md §9).
+  const shared = !won && !!winner && !!ui.player.value?.alive && isAlly(me, winner.id);
   return (
     <div class="menu panel">
-      <h1>{won ? strings.victory : strings.defeat}</h1>
+      <h1>{won ? strings.victory : shared ? strings.sharedVictory : strings.defeat}</h1>
       <p>
         {won
           ? strings.victoryText(goal)
-          : winner
-            ? strings.winnerText(winner.name, goal)
-            : strings.defeatText}
+          : shared
+            ? strings.sharedVictoryText(winner.name)
+            : winner
+              ? strings.winnerText(winner.name, goal)
+              : strings.defeatText}
       </p>
       <button class="primary" onClick={onPlay}>
         {strings.playAgain}

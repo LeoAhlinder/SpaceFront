@@ -121,16 +121,18 @@ Status: playable in the browser against 40 bots. Checked in the desktop app's bu
 
 **Goal:** the real-world countries and their colonies as smart opponents.
 
-- ☐ `data/nations.ts`: countries with tier, flag, colors, Earth spawn region, colony options
-- ☐ `data/difficulty.ts`: Easy/Normal/Hard/Impossible from the gameplay plan
-- ☐ Colonies: spawn on other bodies, start allied with their home nation, become independent when that breaks
-- ☐ Diplomacy: `ally`, `gift`, `embargo` commands; traitor penalty; UI for requests and quick signals
-- ☐ `core/ai/nation.ts`: utility AI, `AiProfile`, every action type from M0–M2.5 (including Sun Bases and siphons)
-- ☐ AI memory (grudges after betrayal), ganging up on the leader at higher difficulties
-- ☐ Match setup screen: difficulty, spawn choice
-- ☐ AI-vs-AI test runs for each difficulty in CI (short tick limit)
+- ☑ `data/nations.ts`: 43 countries with tier, colors, Earth spawn region, colony options (flags come with the M5 sprites)
+- ☑ `data/difficulty.ts`: Easy/Normal/Hard/Impossible from the gameplay plan, with an `AiProfile` per tier
+- ☑ Colonies: spawn on other bodies, start allied with their home nation, become independent when that breaks (or the home nation dies)
+- ☑ Diplomacy: `ally`, `gift`, `embargo` and `signal` commands; traitor penalty; shared victory for allies; UI for requests, gifts, embargoes and quick signals
+- ☑ `core/ai/nation.ts`: utility AI, `AiProfile`, every action type from M0–M2.5 (expand, attack, Spaceports, Habitats, landers, Sun Bases, siphons, siphon raids, ally/betray)
+- ☑ AI memory (grudges after betrayal or attacks), ganging up on the leader at higher difficulties, coordinated wars on Impossible
+- ☑ Match setup screen: difficulty, spawn choice (the spawn phase as before)
+- ☑ AI-vs-AI test runs for each difficulty in CI (3,000 ticks, `tests/ai/difficulty.test.ts`)
 
 **Done when:** Easy is beatable by a new player, and Impossible beats most strong players.
+
+Status: checked as far as tests can (`tests/ai/difficulty.test.ts`, seed 42, 5 minutes of game time). Nations hold ≈ 7% of the land on Easy, 34% on Normal, 71% on Hard and 46% on Impossible (46 nations there split it, and fight each other more); they conquer ≈ 375, 1,800, 6,500 and 3,900 tiles from other factions per nation. Betrayals start on Hard, siphon raids and coordinated wars only on Impossible. A scripted simple player (expands, keeps a troop per tile, builds, never launches or uses diplomacy) spawned in Uzbekistan grows to ≈ 6,400 tiles on Easy and is down to a handful of tiles on Impossible; at 4,000 ticks the same held for three other seeds and spawn regions (Easy 8–11K tiles; Impossible ≤ 1K or dead). Play-tested in the browser on Hard (requests, alliances, gifts, breaking with the traitor notice, right-click diplomacy). Still to check by hand: whether real new players beat Easy and strong players lose on Impossible.
 
 ---
 

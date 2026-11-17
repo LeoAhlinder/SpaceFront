@@ -1,11 +1,21 @@
 import type { FactionId, GridId } from "../ids";
+import type { SignalKind } from "../world/diplomacy";
 import type { ShipKind, StructureKind } from "../world/world";
 
 /**
  * Every way to change the game: from the human, the AI or (later) the network.
  * Commands are plain JSON so they can be saved, replayed and sent.
  */
-export type Command = SpawnCommand | AttackCommand | SetRatioCommand | BuildCommand | LaunchCommand;
+export type Command =
+  | SpawnCommand
+  | AttackCommand
+  | SetRatioCommand
+  | BuildCommand
+  | LaunchCommand
+  | AllyCommand
+  | GiftCommand
+  | EmbargoCommand
+  | SignalCommand;
 
 /** Place the faction's starting territory around `tile`. Once per faction. */
 export interface SpawnCommand {
@@ -58,4 +68,46 @@ export interface LaunchCommand {
   readonly toGrid: GridId;
   readonly toTile: number;
   readonly ratioPct: number;
+}
+
+/**
+ * Diplomacy: ask `other` for an alliance (accepted at once if they already
+ * asked you), accept their request, or break an alliance (which marks you a
+ * traitor for a while).
+ */
+export interface AllyCommand {
+  readonly type: "ally";
+  readonly faction: FactionId;
+  readonly other: FactionId;
+  readonly action: "request" | "accept" | "break";
+}
+
+/** Send Solars and/or troops (from the main pool) to an ally. */
+export interface GiftCommand {
+  readonly type: "gift";
+  readonly faction: FactionId;
+  readonly to: FactionId;
+  readonly solars: number;
+  readonly troops: number;
+}
+
+/** Start (on = true) or lift an embargo: no trade between the two while either has one. */
+export interface EmbargoCommand {
+  readonly type: "embargo";
+  readonly faction: FactionId;
+  readonly other: FactionId;
+  readonly on: boolean;
+}
+
+/**
+ * A quick signal to another faction: "help" (to an ally), "attack" (asks an
+ * ally to attack `about`) or "peace". Changes nothing by itself; nations react to it.
+ */
+export interface SignalCommand {
+  readonly type: "signal";
+  readonly faction: FactionId;
+  readonly to: FactionId;
+  readonly signal: SignalKind;
+  /** The faction the signal is about (for "attack"), else 0. */
+  readonly about: FactionId;
 }

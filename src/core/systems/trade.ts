@@ -1,6 +1,7 @@
 import { BALANCE } from "../../data/balance";
 import { pathLength } from "../space/space";
 import type { System } from "../tick";
+import { hasEmbargo } from "../world/diplomacy";
 import type { Ship, Structure, World } from "../world/world";
 import { gridOf } from "../world/world";
 import { planRoute } from "./ships";
@@ -11,7 +12,7 @@ const T = BALANCE.trade;
 /**
  * Automatic trade (GAMEPLAY_PLAN.md §5): every finished Spaceport (or Sun
  * Base, which works as one) sends a Freighter now and then to a random port
- * of another faction. When it
+ * of another faction (none under an embargo). When it
  * arrives, both owners earn Solars; longer routes pay more.
  */
 export const tradeSystem: System = (world, ctx) => {
@@ -21,7 +22,12 @@ export const tradeSystem: System = (world, ctx) => {
     port.nextTradeTick = ctx.tick + nextTradeDelay(world);
     if (!world.factions[port.owner]!.alive) continue;
     ports ??= world.structures.filter((s) => isPort(s) && s.buildTicksLeft === 0);
-    const partners = ports.filter((p) => p.owner !== port.owner && world.factions[p.owner]!.alive);
+    const partners = ports.filter(
+      (p) =>
+        p.owner !== port.owner &&
+        world.factions[p.owner]!.alive &&
+        !hasEmbargo(world, port.owner, p.owner),
+    );
     if (partners.length === 0) continue;
     launchFreighter(world, port, partners[world.rng.nextInt(partners.length)]!);
   }
@@ -68,11 +74,12 @@ export function tradePayout(world: World, ship: Ship): number {
 
 /**
  * A Freighter arrives. If the destination Spaceport now belongs to the sender
- * (captured on the way), nobody is paid; otherwise both sides earn.
+ * (captured on the way), or an embargo started meanwhile, nobody is paid;
+ * otherwise both sides earn.
  */
 export function deliver(world: World, ship: Ship): void {
   const dest = world.structures[ship.toStructure];
-  if (!dest || dest.owner === ship.owner) return;
+  if (!dest || dest.owner === ship.owner || hasEmbargo(world, ship.owner, dest.owner)) return;
   const pay = tradePayout(world, ship);
   const sender = world.factions[ship.owner]!;
   const receiver = world.factions[dest.owner]!;

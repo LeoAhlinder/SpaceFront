@@ -83,17 +83,19 @@ You, at first. Later, online human players.
 - **On other bodies:** colonies of Earth nations spawn there, e.g. _USA Mars Colony_, _China Lunar Base_, _ESA Europa Station_, _Japan Titan Outpost_.
 - A colony is a separate AI faction that starts **allied with its home nation**. Breaking that alliance (or the home nation dying) turns it independent.
 - Nations build structures and spacecraft, form alliances, betray players, and gang up on whoever is leading.
+- Nations start with a head start by tier (a bigger starting area and more people); colonies start like Tier 3.
+- The EU has no country on the map, so it spawns at Brussels (Belgium).
 
 ### Difficulty scaling
 
 Difficulty controls **which** countries show up, **how many**, and **how smart and strong** they are.
 
-| Difficulty | Nations present                                                               | AI behavior                                                           | Bonuses                            |
-| ---------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------- | ---------------------------------- |
-| Easy       | ~6 smaller nations, few colonies                                              | Passive, slow to build, rarely launch ships                           | −25% growth                        |
-| Normal     | ~12 nations incl. 1–2 major powers                                            | Expands steadily, defends, builds spaceports                          | none                               |
-| Hard       | ~20 nations, all major space powers, colonies on Mars, Moon and Jupiter moons | Targets the weakest neighbor, uses weapons, allies against the leader | +15% growth, +income               |
-| Impossible | ~30 nations, colonies everywhere                                              | Coordinated invasions, attacks Solar Siphons, uses Kinetic Strikes    | +35% growth, +income, faster build |
+| Difficulty | Nations present                                                                | AI behavior                                                                    | Bonuses                                             |
+| ---------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ | --------------------------------------------------- |
+| Easy       | 6 smaller nations (one Tier 2, five Tier 3), 1 colony                          | Passive, slow to build, rarely launch ships                                    | −25% growth                                         |
+| Normal     | 12 nations incl. 2 major powers, 3 colonies                                    | Expands steadily, defends, builds spaceports                                   | none                                                |
+| Hard       | 20 nations, all major space powers, 8 colonies on Mars, Moon and Jupiter moons | Targets the weakest neighbor, allies against the leader, betrays (weapons: M4) | +15% growth, +15% income                            |
+| Impossible | 30 nations, 16 colonies everywhere                                             | Coordinated invasions, raids Solar Siphons (Kinetic Strikes: M4)               | +35% growth, +35% income, builds in 60% of the time |
 
 Country "tiers" decide when a country appears and how strong its AI is:
 
@@ -101,7 +103,9 @@ Country "tiers" decide when a country appears and how strong its AI is:
 - **Tier 2:** Japan, UK, France, Germany, Brazil, South Korea, Canada, Australia, Israel, UAE.
 - **Tier 3:** everyone else on Earth. These act like stronger bots with a name and a flag.
 
-Higher difficulty adds more Tier 1 and Tier 2 countries, gives them more colonies off Earth, and uses smarter AI profiles.
+Higher difficulty adds more Tier 1 and Tier 2 countries, gives them more colonies off Earth, and uses smarter AI profiles. The smartest difference is patience: on higher difficulties nations keep their population near the size where it grows fastest and only send out the surplus, instead of throwing every troop into attacks.
+
+Nations ask players for alliances too, and remember who betrayed them.
 
 ---
 
@@ -204,12 +208,13 @@ Orbital Defense Platforms can shoot down warheads in flight. Big weapons are ann
 
 ## 9. Diplomacy
 
-- **Alliances:** request, accept, break. Allies can't attack each other and share a win.
-- **Betrayal:** breaking an alliance marks you as a _traitor_ for a while. Nations distrust you, and you get a combat penalty.
-- **Quick signals:** emoji/icon messages ("Help!", "Attack them", "Peace?").
+- **Alliances:** request, accept, break. A request can be accepted for 30 seconds. Allies can't attack or land on each other (running attacks stop when two sides ally) and share a win: when everyone left is allied, they win together.
+- **Betrayal:** breaking an alliance marks you as a _traitor_ for 2 minutes. Nations distrust you (they won't ally with a traitor), and your attacks cost 30% more troops.
+- **Quick signals:** "Help!" (to all your allies: loyal nations send troops), "Allies: attack them!" (your nation allies join the war for a minute), "Peace?" (a nation may answer with an alliance).
 - **Gifting:** send Solars or troops to an ally.
-- **Embargo:** stop trade with a faction.
-- Nation AI remembers betrayals and holds grudges.
+- **Embargo:** stop trade with a faction. Either side's embargo stops Freighters both ways, including ones already flying.
+- Nation AI remembers betrayals and attacks, and holds grudges. Bots (Drifters) never ally.
+- Diplomacy in the UI: click a name on the leaderboard, or right-click someone's territory.
 
 ---
 

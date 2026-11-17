@@ -43,10 +43,21 @@ async function main(): Promise<void> {
       // Zooming far out of a world's map goes back to the solar system.
       if (ui.view.value.kind === "planet" && renderer.planet.zoomedOut) actions.openSystem();
     },
+    (x, y) => {
+      // Right click: diplomacy with whoever owns the territory.
+      const hit =
+        ui.view.value.kind === "system"
+          ? renderer.system.coronaTileAt(x, y)
+          : renderer.planet.tileAt(x, y);
+      if (hit) actions.inspectTile(hit);
+    },
   );
 
   attachKeys({
-    cancel: actions.cancel,
+    cancel: () => {
+      actions.cancel();
+      actions.select(null);
+    },
     toggleSystemView: actions.toggleSystemView,
     buildSpaceport: () => actions.toggleMode("spaceport"),
     buildHabitat: () => actions.toggleMode("habitat"),

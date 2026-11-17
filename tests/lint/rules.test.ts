@@ -4,7 +4,11 @@
  */
 import { ESLint } from "eslint";
 import tseslint from "typescript-eslint";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// The first lint loads the whole ESLint config, which can take over 5 s while
+// the heavy AI and soak tests run in parallel.
+vi.setConfig({ testTimeout: 30_000 });
 
 const eslint = new ESLint({
   cwd: process.cwd(),

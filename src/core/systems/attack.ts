@@ -4,6 +4,7 @@ import { isOwnableTerrain, TERRAIN_COST_PCT } from "../grid/terrain";
 import type { FactionId, GridId } from "../ids";
 import { NEUTRAL } from "../ids";
 import type { System } from "../tick";
+import { isAllied } from "../world/diplomacy";
 import { FrontierHeap } from "../world/frontierHeap";
 import { gridModifier } from "../world/modifiers";
 import { setOwner } from "../world/territory";
@@ -110,6 +111,8 @@ function step(world: World, attack: Attack): boolean {
 
   const defender = attack.target === NEUTRAL ? null : world.factions[attack.target]!;
   if (defender && !defender.alive) return finish(world, attacker, attack);
+  // Became allies: the war is over and the troops go home.
+  if (isAllied(world, attack.attacker, attack.target)) return finish(world, attacker, attack);
 
   const grid = gridOf(world, attack.grid)!;
   const budget = Math.min(A.maxTilesPerTick, 1 + Math.floor(attack.troops / A.troopsPerExtraTile));
@@ -162,7 +165,7 @@ function defenseDensity(world: World, defender: Faction, grid: number): number {
   );
 }
 
-/** Troops it costs to take `tile` in this attack. */
+/** Troops it costs to take `tile` in this attack (more for a traitor). */
 function tileCost(world: World, grid: TileGrid, attack: Attack, tile: number): number {
   const terrainPct = TERRAIN_COST_PCT[grid.terrain[tile]!]!;
   let base: number = A.neutralCost;
@@ -171,6 +174,9 @@ function tileCost(world: World, grid: TileGrid, attack: Attack, tile: number): n
     const density = defenseDensity(world, defender, grid.id);
     base = A.enemyBaseCost + Math.floor((density * A.enemyDensityPct) / 100);
     base = Math.floor((base * gridModifier(world, grid.id, "defensePct")) / 100);
+  }
+  if (world.factions[attack.attacker]!.traitorUntil > world.tick) {
+    base = Math.floor((base * BALANCE.diplomacy.traitorAttackCostPct) / 100);
   }
   return Math.max(1, Math.floor((base * terrainPct) / 100));
 }

@@ -1,4 +1,5 @@
 import { aiSystem } from "./ai/bot";
+import { nationSystem } from "./ai/nation";
 import { applyCommands } from "./commands/applyCommands";
 import type { Command } from "./commands/commands";
 import { attackSystem } from "./systems/attack";
@@ -42,6 +43,7 @@ export const SYSTEMS: readonly System[] = [
   tradeSystem,
   coronaSystem,
   aiSystem,
+  nationSystem,
   victorySystem,
 ];
 

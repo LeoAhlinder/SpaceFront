@@ -98,6 +98,7 @@ describe("deltas", () => {
       f2.solars,
       0, // Corona troops
       0, // Corona tiles
+      0, // never a traitor
     ]);
     expect(winner).toBe(-1);
   });

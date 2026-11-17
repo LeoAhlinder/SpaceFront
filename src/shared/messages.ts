@@ -2,7 +2,7 @@
  * Every message between the client (main thread) and the simulation worker.
  * Types only: no logic lives in shared/.
  */
-import type { Command, FactionKind, TickDelta } from "../core";
+import type { Command, Difficulty, DiplomacySnapshot, FactionKind, TickDelta } from "../core";
 
 /** What the player picked in the menu. The worker turns it into a MatchConfig. */
 export interface MatchSetup {
@@ -11,6 +11,8 @@ export interface MatchSetup {
   readonly mapId: "sol";
   readonly botCount: number;
   readonly playerName: string;
+  /** Which nations and colonies play, and how smart they are (data/difficulty.ts). */
+  readonly difficulty: Difficulty;
 }
 
 /** Client → worker. */
@@ -31,6 +33,9 @@ export interface MatchInit {
   /** The Corona around the Sun (its grid id comes right after the bodies), or null. */
   readonly corona: CoronaInit | null;
   readonly factions: readonly FactionInit[];
+  /** Alliances at the start (colonies are allied with their home nation). */
+  readonly diplomacy: DiplomacySnapshot;
+  readonly difficulty: Difficulty;
 }
 
 /** The Corona's polar grid: tile = ring × sectors + sector, ring 0 innermost. */
@@ -59,6 +64,10 @@ export interface FactionInit {
   readonly id: number;
   readonly name: string;
   readonly kind: FactionKind;
+  /** Nations and colonies: the nation id in data/nations.ts (colors and tier come from there). */
+  readonly nationId?: string;
+  /** Colonies: the home nation's faction id. */
+  readonly homeId?: number;
 }
 
 /** Worker → client. */

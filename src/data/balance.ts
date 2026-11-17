@@ -100,6 +100,66 @@ export const BALANCE = {
     attackRatioMaxPct: 50,
   },
 
+  /** Alliances, gifts and embargoes (GAMEPLAY_PLAN.md §9). */
+  diplomacy: {
+    /** An alliance request can be accepted for this long (30 s). */
+    requestTicks: 300,
+    /** Breaking an alliance marks you a traitor for this long (2 min). */
+    traitorTicks: 1_200,
+    /** A traitor's attacks cost this percent of the normal troops. */
+    traitorAttackCostPct: 130,
+  },
+
+  /**
+   * Nation AI tuning shared by every difficulty. How aggressive, spacefaring
+   * etc. a nation is comes from its AiProfile (data/difficulty.ts).
+   */
+  nation: {
+    /** Own tiles sampled per decision to find neighbors. */
+    sampleTiles: 24,
+    /** Random tiles tried around the country's spawn tile (within the radius) if it is taken. */
+    spawnAttempts: 60,
+    spawnSearchRadius: 15,
+    /** Extra spawn radius and starting population (percent) per tier. */
+    spawnRadiusBonus: { 1: 3, 2: 2, 3: 1 },
+    startPopPct: { 1: 250, 2: 175, 3: 125 },
+    /** Below this many troops a nation doesn't attack or launch. */
+    minTroops: 400,
+    /** Percent of troops sent when expanding into neutral land. */
+    expandRatioMinPct: 20,
+    expandRatioMaxPct: 40,
+    /** Random jitter added to every action's score, so equal options alternate. */
+    scoreJitter: 20,
+    /** Landers need this many troops at home, and carry attackRatio percent of them. */
+    landerMinTroops: 2_500,
+    /** Random tiles tried per lander decision when looking for a target on another world. */
+    landerTargetAttempts: 24,
+    /** Corona tiles tried when picking a spot for a Sun Base (the innermost free one wins). */
+    sunBaseTargetAttempts: 24,
+    /** Most Sun Bases a nation keeps (in flight or founded): spacefaring / this, at least 1. */
+    spacefaringPerSunBase: 30,
+    /** Raids on enemy siphons send at least this many troops. */
+    raidMinTroops: 1_500,
+    /** Most allies a nation wants. */
+    maxAllies: 3,
+    /** Chance per decision (percent) to ask someone for an alliance. */
+    allyRequestChancePct: 6,
+    /** The leader is ganged up on once it holds this percent of all land… */
+    leaderSharePct: 3,
+    /** …and at least this percent of the runner-up's land. */
+    leaderMarginPct: 130,
+    /** Grudge added against whoever betrays the nation, and per decision per attack on it. */
+    betrayalGrudge: 300,
+    attackedGrudge: 4,
+    /** Grudges shrink by this much every decision; the most a grudge from attacks can reach. */
+    grudgeDecay: 1,
+    maxAttackGrudge: 60,
+    /** Ignores its allies' "attack them" calls after this long (1 min). */
+    focusTicks: 600,
+    /** Percent of its troops a loyal nation sends an ally that calls for help. */
+    helpGiftPct: 15,
+  },
+
   structures: {
     /** No two structures closer than this many steps (Manhattan) on a map. */
     minSpacing: 6,

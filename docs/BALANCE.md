@@ -1,8 +1,8 @@
 # SpaceFront — Balance Notes
 
-The numbers live in [`src/data/balance.ts`](../src/data/balance.ts) and [`src/data/bodies.ts`](../src/data/bodies.ts). This file explains what they are meant to produce, so a change can be checked against intent. Time is in ticks: **10 ticks = 1 second**.
+The numbers live in [`src/data/balance.ts`](../src/data/balance.ts), [`src/data/bodies.ts`](../src/data/bodies.ts) and [`src/data/difficulty.ts`](../src/data/difficulty.ts). This file explains what they are meant to produce, so a change can be checked against intent. Time is in ticks: **10 ticks = 1 second**.
 
-Last pass: M2.5 (the Corona). Nothing here has been tested with real players yet.
+Last pass: M3 (nations and difficulty). Nothing here has been tested with real players yet.
 
 ---
 
@@ -84,9 +84,37 @@ World income modifiers multiply worker income: Io +50%, Triton +30%, the belt +2
 - Build: a first Spaceport with a 10% chance per decision when they can afford it, and Habitats with a 5% chance. This gives the player trade partners.
 - They never launch landers, but now and then send a Sun Base ship (see _The Corona_).
 
+## Diplomacy
+
+| Number           | Value                                     | Effect                                          |
+| ---------------- | ----------------------------------------- | ----------------------------------------------- |
+| Alliance request | can be accepted for 30 s                  | Asking someone who asked you accepts at once    |
+| Traitor mark     | 2 minutes after breaking an alliance      | Your attacks cost 130% troops; nations distrust |
+| Gift buttons     | 25% of your Solars or troops, allies only | Any amount through the `gift` command           |
+
+## Nations and difficulty
+
+**Intent:** Easy is beatable by a new player, Impossible beats most strong players (GAMEPLAY_PLAN.md §4).
+
+| Difficulty | Nations (Tier 1 + 2 + 3) | Colonies | Growth / income / build time | Spends troops above | Aggression | Decides every |
+| ---------- | ------------------------ | -------- | ---------------------------- | ------------------- | ---------- | ------------- |
+| Easy       | 0 + 1 + 5 = 6            | 1        | 75% / 100% / 100%            | 0% of its pop cap   | 15         | 3–4.5 s       |
+| Normal     | 2 + 3 + 7 = 12           | 3        | 100% / 100% / 100%           | 8%                  | 35         | 2–3 s         |
+| Hard       | 5 + 7 + 8 = 20           | 8        | 115% / 115% / 100%           | 30%                 | 60         | 1.2–1.8 s     |
+| Impossible | 5 + 10 + 15 = 30         | 16       | 135% / 135% / 60%            | 35%                 | 80         | 0.8–1.2 s     |
+
+- **Head start by tier:** Tier 1 nations claim 3 extra steps of land at spawn and start with 250% of the normal troops and workers, Tier 2 2 steps and 175%, Tier 3 1 step and 125%. Colonies start like Tier 3.
+- **Tier profiles:** Tier 2 has ¾ of Tier 1's spacefaring; Tier 3 builds half as much, has ¼ of the spacefaring and never raids siphons.
+- **Spending floor** (`spendAbovePopPct`): a nation only sends troops out (attacks, landers) while its population is above this share of its cap. Growth is fastest a bit below half the cap, so a nation that keeps its population there and spends only the surplus outgrows one that spends everything. This is the strongest difficulty lever: in the AI-vs-AI test, going from 0% to 15% on Normal took the nations from ≈ 25% to ≈ 85% of all land in 10 minutes, so Normal uses 8%.
+- **Leader:** whoever holds the most land, at least 3% of it (≈ 13,000 tiles) and 130% of the runner-up. Hard and Impossible nations gang up on it: they won't ally with it, betray it, and prefer attacking it.
+- **Grudges:** a betrayal adds 300, every decision under attack adds 4 (up to 60), and grudges fade by 1 per decision. A nation won't ally with someone it holds more than 30 against.
+- **Wars:** a nation attacks a neighbor whose troop density is below `attackWeakerThanPct` of its own (50% on Easy up to 110% on Impossible), or a stronger one if it has a reason (grudge, leader, an ally's call). Bots are a little more tempting (+10).
+- **Space:** landers need 2,500 troops at home; a nation keeps at most one Sun Base per 30 spacefaring (Impossible Tier 1: 2). Siphon raids need 1,500 troops.
+
 ## Checks
 
 - **M2 goal test** (`src/core/systems/economy.test.ts`): over 10 minutes, a faction that builds a Spaceport and three Habitats and trades ends with about 3.6× the Solars (counting what it spent) and 2.3× the population of one that does nothing.
-- **Solar-system soak test** (`tests/soak/solarSystem.test.ts`): 40 bots for 5 minutes (with the Corona) build about 42 Spaceports, 237 Habitats and 7 Sun Bases, at about 0.38 ms per tick. That is a lot of Habitats; watch it when nations arrive (M3).
+- **Solar-system soak test** (`tests/soak/solarSystem.test.ts`): 40 bots for 5 minutes (with the Corona) build about 42 Spaceports, 237 Habitats and 7 Sun Bases, at about 0.38 ms per tick. That is a lot of Habitats.
+- **Difficulty test** (`tests/ai/difficulty.test.ts`): every difficulty with its nations, 40 bots and a scripted simple player in Uzbekistan for 5 minutes. Nations hold ≈ 7 / 34 / 71 / 46% of all land on Easy / Normal / Hard / Impossible and conquer ≈ 375 / 1,800 / 6,500 / 3,900 tiles each from other factions; the player ends with ≈ 6,400 tiles on Easy and 8 on Impossible. Impossible costs ≈ 0.6 ms per tick at 5 minutes and ≈ 0.85–1.1 ms at 10 minutes (46 nations build about 3,000–4,000 Habitats by then, and every structure check scans all structures: the first thing to index if AI cost grows).
 - **M2.5 goal test** (`src/core/systems/corona.test.ts`): over 10 minutes, a faction with two inner siphons ends with ≈ 17× the Solars (counting what it spent) of one that stays home, and ≈ 2.7× one with two outer siphons. A lander onto its Sun Base takes everything, and the attacker then earns ≈ 40× the loser's income.
 - Siphon income dwarfs worker income on small holdings. That is the design (the Sun is the prize), but it needs a check with real players, and M4's Warships are meant to keep siphons in check.

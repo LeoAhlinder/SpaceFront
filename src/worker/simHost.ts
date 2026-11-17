@@ -4,7 +4,9 @@ import type { GridId, MatchConfig, TerrainMap, World } from "../core";
 import {
   addBot,
   addFaction,
+  addNations,
   createWorld,
+  diplomacySnapshot,
   drainDelta,
   isOwnableTerrain,
   loadTerrainMap,
@@ -27,7 +29,8 @@ export interface HostEnv {
 }
 
 /**
- * Owns the World in single-player: builds the match, runs ticks on a fixed
+ * Owns the World in single-player: builds the match (the player, the
+ * difficulty's nations and colonies, then bots), runs ticks on a fixed
  * timer, applies the player's commands and posts a delta after every tick.
  * In multiplayer (M6) commands will come from the server instead.
  */
@@ -78,7 +81,7 @@ export class SimHost {
     const maps = await Promise.all(LANDABLE_BODIES.map((b) => this.loadMap(b.map!.mapId)));
     const config: MatchConfig = {
       seed: setup.seed,
-      difficulty: "normal",
+      difficulty: setup.difficulty,
       bodies: LANDABLE_BODIES.map((b) => ({
         width: b.map!.width,
         height: b.map!.height,
@@ -91,6 +94,8 @@ export class SimHost {
     const world = createWorld(config, new Map(maps.map((m) => [m.id, m])));
     trackChanges(world);
     this.playerId = addFaction(world, setup.playerName, "player").id;
+    const earth = maps.find((m) => m.id === "earth");
+    if (earth) addNations(world, setup.difficulty, earth.regions);
     const homes = botHomes(world, setup.botCount, setup.seed);
     homes.forEach((grid, i) => addBot(world, `Bot ${i + 1}`, grid));
     this.world = world;
@@ -117,7 +122,18 @@ export class SimHost {
         middleRings: world.corona.middleRings,
         owner: world.corona.owner.slice(),
       },
-      factions: world.factions.slice(1).map((f) => ({ id: f.id, name: f.name, kind: f.kind })),
+      factions: world.factions.slice(1).map((f) => {
+        const nation = world.nations.find((n) => n.faction === f.id);
+        return {
+          id: f.id,
+          name: f.name,
+          kind: f.kind,
+          ...(nation && { nationId: nation.nationId }),
+          ...(nation && nation.home !== 0 && { homeId: nation.home }),
+        };
+      }),
+      diplomacy: diplomacySnapshot(world),
+      difficulty: setup.difficulty,
     };
     this.env.post({ type: "init", init });
     this.timer = this.env.setInterval(() => this.step(), TICK_MS);

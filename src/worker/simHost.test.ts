@@ -26,7 +26,7 @@ async function started(botCount = 20) {
   const t = testHost();
   t.host.handle({
     type: "start",
-    setup: { seed: 9, mapId: "sol", botCount, playerName: "Tester" },
+    setup: { seed: 9, mapId: "sol", botCount, playerName: "Tester", difficulty: "normal" },
   });
   for (let i = 0; i < 50 && !t.posted.some((m) => m.type === "init"); i++) {
     await new Promise((resolve) => setTimeout(resolve, 10));
@@ -52,6 +52,25 @@ describe("SimHost", () => {
     expect([earth.width, earth.height]).toEqual([800, 386]);
     expect(init.factions.filter((f) => f.kind === "bot")).toHaveLength(20);
     expect(init.spawnPhaseTicks).toBeGreaterThan(0);
+  });
+
+  it("adds the difficulty's nations and colonies, colonies allied with home", async () => {
+    const { init } = await started();
+    const nations = init.factions.filter((f) => f.kind === "nation");
+    const colonies = nations.filter((f) => f.homeId !== undefined);
+    expect(nations.length - colonies.length).toBe(12);
+    expect(colonies.length).toBeGreaterThan(0);
+    for (const c of colonies) {
+      const pairs = init.diplomacy.alliances;
+      const allied = pairs.some(
+        (_, i) =>
+          i % 2 === 0 &&
+          [pairs[i], pairs[i + 1]].includes(c.id) &&
+          [pairs[i], pairs[i + 1]].includes(c.homeId),
+      );
+      expect(allied, c.name).toBe(true);
+    }
+    expect(init.difficulty).toBe("normal");
   });
 
   it("posts a delta every tick and applies the player's commands", async () => {

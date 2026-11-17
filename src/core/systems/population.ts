@@ -27,7 +27,7 @@ export const populationSystem: System = (world) => {
       faction,
       landTiles(world, faction),
       habitats[faction.id] ?? 0,
-      weightedModifier(world, faction, "growthPct"),
+      Math.floor((weightedModifier(world, faction, "growthPct") * faction.bonus.growthPct) / 100),
     );
     rebalance(faction);
   }

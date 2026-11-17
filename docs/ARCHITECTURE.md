@@ -111,7 +111,7 @@ This keeps the simulation portable to a server and stops rendering code from rea
   8. `constructionSystem`: build timers; a finished Spaceport schedules its first Freighter
      8b. `tradeSystem`: Spaceports send Freighters to other factions' Spaceports; both owners are paid on arrival (in `shipSystem`)
   9. `coronaSystem`: Sun Base training, heat drain, decay of territory cut off from a Sun Base
-  10. `aiSystem`: bots and nations queue commands for **next** tick (only every N ticks, staggered per faction)
+  10. `aiSystem` (bots) and `nationSystem` (nations and colonies): queue commands for the **next** tick (only every N ticks, staggered per faction)
   11. `victorySystem`: win/loss checks
 
 - A system is a plain function: `(world: World, ctx: TickContext) => void`. Systems don't call each other. They share data only through `World`.
@@ -140,15 +140,18 @@ interface World {
   factions: Faction[]; // index 0 = neutral; each keeps a list of its tiles
   tileSlots: Int32Array[]; // per grid: a tile's index in its owner's tile list
   bots: BotState[]; // per-bot RNG stream and next decision tick
+  nations: NationState[]; // nation/colony AI: profile, RNG stream, grudges, colony's home
   ships: Ship[]; // in flight, with their planned route
   structures: Structure[]; // id = index; structureAt[grid][tile] finds them
   attacks: Attack[];
-  alliances: AllianceTable;
+  diplomacy: Diplomacy; // alliances, alliance requests, embargoes
   pending: CommandQueue;
 }
 ```
 
 - **Faction ids are `uint16`.** 0 = neutral/unowned.
+- **Factions** also carry `bonus` (growth, income and build-time percent, and a spawn head start; nations get theirs from the difficulty and tier, everyone else has none) and `traitorUntil` (the tick their traitor mark ends).
+- **Diplomacy** (`world/diplomacy.ts`): alliances are a set of pair keys (`low × 65536 + high`); requests and embargoes are keyed `from × 65536 + to`, so `isAllied` and `hasEmbargo` are cheap enough for attacks and trade. Requests expire after `BALANCE.diplomacy.requestTicks`. `breakAlliance` marks the breaker a traitor, gives the victim's AI a grudge, and frees a colony from its home nation. Allies can't attack or land on each other, and a running attack ends when its two sides ally.
 - **The Corona** is not in `world.grids`: it is `world.corona` (when `MatchConfig.corona` is set), with the next GridId after the bodies. Per-grid arrays (`tileSlots`, `structureAt`, `Faction.gridTiles`) have one entry more than `grids`. Look grids up with `gridOf(world, id)`; `isCorona(world, id)` tells them apart.
 - **Two troop pools per faction:** `troops` for the bodies and `coronaTroops` for the Corona (troops don't grow there). `troopPool`/`addTroops` pick the pool by grid: attacks, landings and launches use the pool of the grid they happen on. `landTiles(world, f)` (tiles on bodies) drives the population cap, income modifiers, the win condition and the delta's tile count.
 - **Tile lists:** every faction keeps `tiles`, the TileRefs (`grid × 2^24 + tile`) it owns, kept in sync by `setOwner` with O(1) swap-removal through `tileSlots`. AI and attacks look at a faction's own land through this list instead of scanning whole grids.
@@ -218,8 +221,17 @@ type Command =
       ratioPct: number; // percent of the faction's troops to send
     }
   | { type: "ally"; faction: FactionId; other: FactionId; action: "request" | "accept" | "break" }
-  | { type: "gift"; faction: FactionId; to: FactionId; solars?: number; troops?: number }
+  | { type: "gift"; faction: FactionId; to: FactionId; solars: number; troops: number } // allies only
   | { type: "embargo"; faction: FactionId; other: FactionId; on: boolean }
+  // A quick signal ("Help!", "Attack them", "Peace?"). Changes nothing but the receiving nation's AI.
+  | {
+      type: "signal";
+      faction: FactionId;
+      to: FactionId;
+      signal: "help" | "attack" | "peace";
+      about: FactionId;
+    }
+  // M4, not implemented yet:
   | {
       type: "fireWeapon";
       faction: FactionId;
@@ -238,20 +250,34 @@ type Command =
 
 - Lives in `core/ai/` and runs inside the simulation, so it is deterministic and can later run on the server.
 - **Bots** (`core/ai/bot.ts`): a few rules. A bot spawns on a random free tile, then each decision samples 16 of its own tiles to see what it borders. It mostly expands into neutral land, sometimes attacks a neighbor with under 70% of its troops, never attacks anyone stronger, and runs at most 2 attacks at once. Each bot has its own RNG stream and decides every 10–15 ticks, offset by its id. 50 bots on Earth cost about 0.25 ms per tick.
-- **Nations:** utility-based. Every decision interval, each nation scores candidate actions (expand, attack neighbor X, build Y, launch to body Z, send a Sun Base, ally/betray) and picks the best one. How it scores them comes from an `AiProfile`:
+- **Nations** (`core/ai/nation.ts`): utility-based. Each decision (every `reactionTicks` plus jitter, offset by id) a nation:
+  1. remembers: grudges fade a little, and every attack on it adds a small grudge against the attacker (a betrayal adds a big one);
+  2. does at most one diplomatic act: gifts troops to an ally that called for help, answers a peace signal, accepts a request (not from traitors, grudge holders, bots, or the leader it gangs up on), betrays an ally (the leader, or a much weaker ally on aggressive profiles; loyalty decides), or asks a random nation or player for an alliance;
+  3. scores every action and takes the best (with a little random jitter): expand into neutral land, attack a neighbor (weaker ones, grudges, the leader and allies' targets score higher), build (a Spaceport on a world without one, Habitats, a siphon on Corona land), launch a Troop Lander to another world (empty land or a weak enemy), send a Sun Base ship as deep into the Corona as it finds room, or raid an enemy siphon or Sun Base with a lander (capturing it with the tile);
+  4. on coordinated profiles, asks every ally to join a new war with an "attack" signal.
+
+  Troops only go out (attacks, landers) while the population is above `spendAbovePopPct` of its cap. Growth is fastest a bit below half the cap, so the smart profiles stay there and spend only the surplus; this one number makes the biggest strength difference between difficulties. The leader (`findLeader`) is whoever holds the most land, at least `BALANCE.nation.leaderSharePct` of it and clearly more than the runner-up. A colony follows its home nation until their alliance breaks or the home nation dies. The profile:
 
   ```ts
   interface AiProfile {
-    aggression: number; // 0–100
+    aggression: number; // 0–100: attacking neighbors vs peaceful expansion
     builder: number; // preference for structures
-    spacefaring: number; // preference for leaving home and going for the Sun
-    loyalty: number; // chance to keep alliances
+    spacefaring: number; // preference for landers and Sun Bases (0 = never)
+    loyalty: number; // chance to keep alliances, and to accept one
     reactionTicks: number; // how often it decides
-    bonus: { growth: number; income: number; buildSpeed: number };
+    spendAbovePopPct: number; // only sends troops out above this share of its population cap
+    maxAttacks: number;
+    attackWeakerThanPct: number; // attacks factions below this share of its troop density
+    attackRatioMinPct: number; // percent of troops per attack
+    attackRatioMaxPct: number;
+    gangUpOnLeader: boolean;
+    coordinated: boolean; // calls allies into its wars
+    raidsSiphons: boolean; // lands on enemy siphons and Sun Bases
+    bonus: { growthPct: number; incomePct: number; buildTimePct: number };
   }
   ```
 
-  A profile is picked from the nation's **tier** and the match **difficulty** (`data/difficulty.ts`).
+  A profile is picked from the nation's **tier** and the match **difficulty** (`data/difficulty.ts`). `addNations` (`core/ai/matchSetup.ts`) picks the difficulty's countries per tier by the match seed, spawns them at their country's spawn tile on Earth (with a head start by tier), and adds colonies round-robin from the biggest space powers on the worlds the difficulty allows.
 
 - AI decisions are spread across ticks (each faction decides on a different tick), so the CPU load stays flat.
 
@@ -259,30 +285,32 @@ type Command =
 
 After each tick, the host calls `drainDelta(world)` (`core/delta`) to collect what changed:
 
-- Tiles whose owner changed: `(grid, tile, owner)` triples in a `Uint32Array`. `setOwner` records changed tiles in `world.changes`, but only after the host calls `trackChanges(world)`; tests and servers that don't listen record nothing. `world.changes` is not game state and is never hashed.
-- Faction stats: `id, alive, troops, workers, land tiles, solars, Corona troops, Corona tiles` per faction in a `Float64Array`
+- Tiles whose owner changed: `(grid, tile, owner)` triples in a `Uint32Array`. `setOwner` records changed tiles in `world.log`, but only after the host calls `trackChanges(world)`; tests and servers that don't listen record nothing. `world.log` is not game state and is never hashed.
+- Faction stats: `id, alive, troops, workers, land tiles, solars, Corona troops, Corona tiles, traitor until` per faction in a `Float64Array`
 - The winner, or -1
-- Later: ships spawned, moved or destroyed, structures built or destroyed, and events for the UI ("alliance requested", "nuke incoming", "siphon captured")
+- Structures built, finished or captured; ships launched (with their routes) and landed
+- Diplomacy `events` (alliance requests, alliances, betrayals, gifts, embargoes, signals, colonies going independent), and a full `diplomacy` snapshot (alliances and embargoes) whenever there were any. Events go into `world.log` like tile changes: not game state, never hashed.
+- Later: events like "nuke incoming" or "siphon captured"
 
 Deltas are the only thing that leaves the worker each tick.
 
 ### 4.10 Match flow
 
 - **Spawn phase:** `MatchConfig.spawnPhaseTicks` (100 ticks = 10 s in real matches, 0 in tests). During it, attacks are rejected and population doesn't grow, so everyone gets to pick a spot first.
-- **Victory** (`victorySystem`, last each tick): the first faction to own `winLandPct` (80%) of all ownable land on bodies wins (Corona tiles don't count, and `world.ownableTiles` excludes them), or the last faction standing. Factions that haven't spawned yet still count as in the game. Core keeps simulating after a win; the host decides to stop.
+- **Victory** (`victorySystem`, last each tick): the first faction to own `winLandPct` (80%) of all ownable land on bodies wins (Corona tiles don't count, and `world.ownableTiles` excludes them), or the last faction standing. Allies share a win: when every faction left (at most 8) is allied with every other, the one with the most land is the winner and the client shows the win to its allies too. Factions that haven't spawned yet still count as in the game. Core keeps simulating after a win; the host decides to stop.
 
 ---
 
 ## 5. Worker ↔ client
 
 - `src/shared/messages.ts` defines every message as a discriminated union.
-- **Client → worker:** `start(setup)` (seed, map, bot count, player name), `command(cmd)`, `pause`. Later: `setSpeed`, `save`, `load`.
+- **Client → worker:** `start(setup)` (seed, map, bot count, player name, difficulty), `command(cmd)`, `pause`. Later: `setSpeed`, `save`, `load`.
 - **Worker → client:**
-  - `init`: static data (player id, spawn phase length, ownable land and win share, grid terrain and owners, the Corona's shape and owners, faction names and kinds). Sent once per match. The client picks faction colors itself.
+  - `init`: static data (player id, spawn phase length, ownable land and win share, grid terrain and owners, the Corona's shape and owners, faction names and kinds, nation ids and colonies' home nations, the starting alliances, the difficulty). Sent once per match. The client picks faction colors itself (nations' colors come from `data/nations.ts`).
   - `tick`: the delta. Sent every tick. Its typed arrays are **transferred**, not copied.
   - `error`: the match failed to start
   - Later: `event` messages for the UI, `saveData`
-- **SimHost** (`worker/simHost.ts`) owns the world in single-player: it loads the map files, builds the match, runs `runTick` every `TICK_MS` and posts the delta. It only accepts commands for the player's own faction, and it stops the timer when someone wins. Its environment (posting, file loading, timers) is injected, so tests run it without a real worker.
+- **SimHost** (`worker/simHost.ts`) owns the world in single-player: it loads the map files, builds the match (the player, then the difficulty's nations and colonies with `addNations`, then bots), runs `runTick` every `TICK_MS` and posts the delta. It only accepts commands for the player's own faction, and it stops the timer when someone wins. Its environment (posting, file loading, timers) is injected, so tests run it without a real worker.
 - The client never sees the `World` object, only deltas. The same split works later when the deltas come from a server.
 
 ---
@@ -315,6 +343,7 @@ Deltas are the only thing that leaves the worker each tick.
 - Reads from `ClientStore` via signals. It never touches the renderer or worker directly. It sends commands through `SimBridge`.
 - Screens: Main menu → Match setup (difficulty, spawn) → In-game HUD → End screen.
 - HUD: Solars, troops/workers slider, attack ratio slider, build menu, faction list/leaderboard, event feed, minimap.
+- Diplomacy: clicking a leaderboard row (or right-clicking territory) opens a panel for that faction: ask, accept or break an alliance, gift 25% of your Solars or troops to an ally, embargo, "Peace?" and "Allies: attack them!". Incoming requests show with an Accept button, diplomacy messages as short notices, and allies in a list with a "Help!" button.
 
 ---
 

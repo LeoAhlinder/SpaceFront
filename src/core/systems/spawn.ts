@@ -7,13 +7,14 @@ import type { World } from "../world/world";
 
 /**
  * Claims the neutral, ownable tiles within BALANCE.spawn.radius steps of the
- * spawn tile (walking only over ownable land) and gives the starting population.
+ * spawn tile (walking only over ownable land; nations claim a bit more) and
+ * gives the starting population (more for nations, by tier).
  * The command was validated before this runs.
  */
 export function applySpawn(world: World, command: SpawnCommand): void {
   const grid = world.grids[command.grid]!;
   const faction = world.factions[command.faction]!;
-  const radius = BALANCE.spawn.radius;
+  const radius = BALANCE.spawn.radius + faction.bonus.spawnRadius;
 
   const out = new Int32Array(grid.maxNeighbors);
   const distance = new Map<number, number>([[command.tile, 0]]);
@@ -34,7 +35,7 @@ export function applySpawn(world: World, command: SpawnCommand): void {
   }
 
   faction.hasSpawned = true;
-  faction.troops = BALANCE.spawn.troops;
-  faction.workers = BALANCE.spawn.workers;
+  faction.troops = Math.floor((BALANCE.spawn.troops * faction.bonus.startPopPct) / 100);
+  faction.workers = Math.floor((BALANCE.spawn.workers * faction.bonus.startPopPct) / 100);
   faction.solars = BALANCE.spawn.solars;
 }

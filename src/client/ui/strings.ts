@@ -58,4 +58,52 @@ export const strings = {
   winnerText: (name: string, goal: number) =>
     `${name} controls ${goal}% of the solar system's land.`,
   error: (message: string) => `Something went wrong: ${message}`,
+  sharedVictory: "Shared victory!",
+  sharedVictoryText: (name: string) => `You and your ally ${name} hold the solar system together.`,
+
+  // Match setup
+  difficulty: "Difficulty",
+
+  // Diplomacy
+  diplomacyHint: "Click a name on the leaderboard (or right-click territory) for diplomacy",
+  allies: "Allies",
+  noAllies: "No allies yet",
+  nation: (tier: number) => `Nation · Tier ${tier}`,
+  colonyOf: (home: string) => `Colony of ${home}`,
+  bot: "Drifter (bot)",
+  traitor: "Traitor",
+  allied: "Allied",
+  embargoed: "Embargo",
+  askAlliance: "Ask to ally",
+  asked: "Asked…",
+  acceptAlliance: "Accept alliance",
+  decline: "Ignore",
+  breakAlliance: "Break alliance",
+  breakWarning: "You'll be a traitor for 2 minutes: attacks cost more and nations distrust you",
+  giftSolars: (amount: string) => `Gift ${amount} ☉`,
+  giftTroops: (amount: string) => `Gift ${amount} troops`,
+  embargo: "Embargo",
+  liftEmbargo: "Lift embargo",
+  signalPeace: "Peace?",
+  signalAttack: "Allies: attack them!",
+  signalHelp: "Help!",
+  close: "Close",
+  botsNeverAlly: "Drifters never ally",
+  noticeAllyRequest: (name: string) => `${name} asks for an alliance`,
+  noticeAllied: (name: string) => `You and ${name} are now allies`,
+  noticeBetrayed: (name: string) => `${name} broke your alliance!`,
+  noticeYouBroke: (name: string) => `You broke your alliance with ${name}: traitor for 2 minutes`,
+  noticeGift: (name: string, solars: number, troops: number) =>
+    `${name} sent you ${[solars > 0 ? `${solars} ☉` : "", troops > 0 ? `${troops} troops` : ""]
+      .filter(Boolean)
+      .join(" and ")}`,
+  noticeEmbargo: (name: string, on: boolean) =>
+    on ? `${name} stopped trading with you` : `${name} lifted its embargo`,
+  noticeSignal: (name: string, signal: "help" | "attack" | "peace", about: string) =>
+    signal === "help"
+      ? `${name}: Help!`
+      : signal === "attack"
+        ? `${name}: Attack ${about}!`
+        : `${name}: Peace?`,
+  noticeIndependent: (name: string) => `${name} declared independence`,
 };

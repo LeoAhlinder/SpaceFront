@@ -1,4 +1,5 @@
 import type { FactionKind, Terrain } from "../../core";
+import { nationById } from "../../data/nations";
 
 export type TerrainPalette = Record<Terrain, number>;
 
@@ -56,9 +57,21 @@ export const BODY_COLORS: Record<string, number> = {
 
 const PLAYER_COLOR = 0x29d4ff;
 
-/** A stable, distinct color per faction. The player always gets the same bright cyan. */
-export function factionColor(id: number, kind: FactionKind): number {
+/**
+ * A stable, distinct color per faction. The player always gets the same
+ * bright cyan; nations use their own color, colonies a lighter shade of it.
+ */
+export function factionColor(
+  id: number,
+  kind: FactionKind,
+  nationId?: string,
+  isColony = false,
+): number {
   if (kind === "player") return PLAYER_COLOR;
+  if (nationId !== undefined) {
+    const color = nationById(nationId).color;
+    return isColony ? mix(color, 0xffffff, 0.35) : color;
+  }
   // Golden-ratio hue steps spread neighbors' colors apart; skip the player's cyan band.
   let hue = (id * 0.618033988749895) % 1;
   if (hue > 0.47 && hue < 0.56) hue = (hue + 0.12) % 1;

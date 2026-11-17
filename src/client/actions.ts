@@ -1,9 +1,12 @@
 import { BALANCE } from "../data/balance";
-import type { Command, FactionId, GridId } from "../core";
+import type { Command, FactionId, GridId, SignalKind } from "../core";
 import type { SimBridge } from "./bridge/simBridge";
 import type { TileHit } from "./render/renderer";
 import type { Mode } from "./store/clientStore";
 import { dismissAlert, isPortKind, ui, view } from "./store/clientStore";
+
+/** Share of your Solars or troops a gift button sends. */
+const GIFT_PCT = 25;
 
 /** Everything the player can do, turned into view changes or messages for the simulation. */
 export interface Actions {
@@ -17,6 +20,15 @@ export interface Actions {
   readonly toggleMode: (mode: Exclude<Mode, "none">) => void;
   readonly cancel: () => void;
   readonly focusAlert: (id: number, grid: number) => void;
+  /** Opens the diplomacy panel for a faction (null closes it). */
+  readonly select: (faction: number | null) => void;
+  /** Opens the diplomacy panel for whoever owns the tile. */
+  readonly inspectTile: (hit: TileHit) => void;
+  readonly ally: (other: number, action: "request" | "accept" | "break") => void;
+  readonly gift: (to: number, what: "solars" | "troops") => void;
+  readonly embargo: (other: number, on: boolean) => void;
+  /** "help" goes to every ally; "attack" asks every ally to attack `about`; "peace" goes to `to`. */
+  readonly signal: (signal: SignalKind, to: number) => void;
 }
 
 export function createActions(bridge: SimBridge): Actions {
@@ -60,6 +72,7 @@ export function createActions(bridge: SimBridge): Actions {
           mapId: "sol",
           botCount: BALANCE.match.defaultBotCount,
           playerName: "You",
+          difficulty: ui.difficulty.value,
         },
       });
     },
@@ -129,6 +142,51 @@ export function createActions(bridge: SimBridge): Actions {
     focusAlert: (id, grid) => {
       dismissAlert(id);
       openPlanet(grid);
+    },
+
+    select: (faction) => {
+      ui.selected.value = faction === player() ? null : faction;
+    },
+
+    inspectTile: (hit) => {
+      const owner = view.owners[hit.grid]?.[hit.tile] ?? 0;
+      ui.selected.value = owner === 0 || owner === player() ? null : owner;
+    },
+
+    ally: (other, action) => {
+      const faction = player();
+      if (faction !== null) send({ type: "ally", faction, other: other as FactionId, action });
+    },
+
+    gift: (to, what) => {
+      const faction = player();
+      const me = ui.player.value;
+      if (faction === null || !me) return;
+      const amount = Math.floor(((what === "solars" ? me.solars : me.troops) * GIFT_PCT) / 100);
+      if (amount < 1) return;
+      send({
+        type: "gift",
+        faction,
+        to: to as FactionId,
+        solars: what === "solars" ? amount : 0,
+        troops: what === "troops" ? amount : 0,
+      });
+    },
+
+    embargo: (other, on) => {
+      const faction = player();
+      if (faction !== null) send({ type: "embargo", faction, other: other as FactionId, on });
+    },
+
+    signal: (signal, to) => {
+      const faction = player();
+      if (faction === null) return;
+      const targets = signal === "peace" ? [to] : ui.relations.value.allies;
+      const about = (signal === "attack" ? to : 0) as FactionId;
+      for (const ally of targets) {
+        if (ally === to && signal === "attack") continue;
+        send({ type: "signal", faction, to: ally as FactionId, signal, about });
+      }
     },
   };
 }

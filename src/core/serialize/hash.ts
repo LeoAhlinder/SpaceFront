@@ -28,6 +28,9 @@ export function hashWorld(world: World): number {
     h.int(f.solars);
     h.int(f.solarsMilli);
     h.int(f.tileCount);
+    h.int(f.traitorUntil);
+    const b = f.bonus;
+    h.ints([b.growthPct, b.incomePct, b.buildTimePct, b.spawnRadius, b.startPopPct]);
   }
 
   h.int(world.grids.length);
@@ -103,10 +106,40 @@ export function hashWorld(world: World): number {
     h.int(b.nextDecisionTick);
   }
 
+  h.int(world.nations.length);
+  for (const n of world.nations) {
+    h.int(n.faction);
+    h.string(n.nationId);
+    h.int(n.tier);
+    const p = n.profile;
+    h.ints([p.aggression, p.builder, p.spacefaring, p.loyalty, p.reactionTicks, p.maxAttacks]);
+    h.int(n.home);
+    h.int(n.homeGrid);
+    h.int(n.spawnTile);
+    h.words(n.rng.state);
+    h.int(n.nextDecisionTick);
+    h.ints(sortedEntries(n.grudges));
+    h.int(n.focus);
+    h.int(n.focusUntil);
+    h.int(n.helpFrom);
+    h.int(n.peaceFrom);
+    h.int(n.calledTarget);
+  }
+
+  const d = world.diplomacy;
+  h.ints([...d.alliances].sort((a, b) => a - b));
+  h.ints(sortedEntries(d.requests));
+  h.ints([...d.embargoes].sort((a, b) => a - b));
+
   // Not hashed: world.pending (queued commands are input, not state), and the
   // faction tile lists / tileSlots (derived from the owner arrays; their order
   // only matters through outcomes, which the hash already covers).
   return h.digest();
+}
+
+/** A number → number map as sorted key, value pairs (so insertion order doesn't matter). */
+function sortedEntries(map: ReadonlyMap<number, number>): number[] {
+  return [...map].sort((a, b) => a[0] - b[0]).flatMap(([key, value]) => [key, value]);
 }
 
 const FACTION_KIND_CODE: Record<FactionKind, number> = {

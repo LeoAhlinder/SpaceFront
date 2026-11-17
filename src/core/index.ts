@@ -3,19 +3,26 @@
  * (and the client/shared folders only import *types* from it).
  */
 export { addBot, aiSystem } from "./ai/bot";
+export { addNations } from "./ai/matchSetup";
+export { addNation, findLeader, nationOf, nationSystem, receiveSignal } from "./ai/nation";
+export type { NationOptions, NationState } from "./ai/nation";
 export { applyCommands, queueCommand } from "./commands/applyCommands";
 export type {
+  AllyCommand,
   AttackCommand,
   BuildCommand,
   Command,
+  EmbargoCommand,
+  GiftCommand,
   LaunchCommand,
   SetRatioCommand,
+  SignalCommand,
   SpawnCommand,
 } from "./commands/commands";
 export { validateCommand } from "./commands/validate";
 export { TICK_MS } from "./constants";
-export { drainDelta, FACTION_STATS_STRIDE, trackChanges } from "./delta/delta";
-export type { ShipView, StructureView, TickDelta } from "./delta/delta";
+export { diplomacySnapshot, drainDelta, FACTION_STATS_STRIDE, trackChanges } from "./delta/delta";
+export type { DiplomacySnapshot, ShipView, StructureView, TickDelta } from "./delta/delta";
 export { assert, AssertionError } from "./debug";
 export { Band, BAND_KEYS, PolarGrid } from "./grid/polarGrid";
 export { RectGrid } from "./grid/rectGrid";
@@ -56,6 +63,18 @@ export { populationCap, populationSystem } from "./systems/population";
 export { victorySystem } from "./systems/victory";
 export { runTick, runTicks, SYSTEMS } from "./tick";
 export type { RejectedCommand, System, TickContext } from "./tick";
+export {
+  alliesOf,
+  breakAlliance,
+  hasEmbargo,
+  hasRequest,
+  isAllied,
+  isTraitor,
+  makeAlliance,
+  requestAlliance,
+  setIndependent,
+} from "./world/diplomacy";
+export type { Diplomacy, GameEvent, SignalKind } from "./world/diplomacy";
 export { eliminate, setOwner } from "./world/territory";
 export { refGrid, refTile, tileRef } from "./world/tileRef";
 export type { TileRef } from "./world/tileRef";
@@ -77,6 +96,7 @@ export type {
   ChangeLog,
   Difficulty,
   Faction,
+  FactionBonus,
   FactionKind,
   MatchConfig,
   Ship,

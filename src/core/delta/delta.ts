@@ -1,3 +1,4 @@
+import type { GameEvent } from "../world/diplomacy";
 import { refGrid, refTile } from "../world/tileRef";
 import type { ShipKind, StructureKind, World } from "../world/world";
 import { coronaTiles, gridOf } from "../world/world";
@@ -5,9 +6,9 @@ import { coronaTiles, gridOf } from "../world/world";
 /**
  * Numbers per faction in TickDelta.stats: id, alive (0/1), troops, workers,
  * land tiles (bodies only, as the win condition counts them), solars,
- * Corona troops, Corona tiles.
+ * Corona troops, Corona tiles, traitor until (tick, 0 = never).
  */
-export const FACTION_STATS_STRIDE = 8;
+export const FACTION_STATS_STRIDE = 9;
 
 /** A structure's current state, sent whenever it is built, finished or captured. */
 export interface StructureView {
@@ -54,11 +55,33 @@ export interface TickDelta {
   readonly shipsLanded: readonly number[];
   /** Winning faction id, or -1 while the match runs. */
   readonly winner: number;
+  /** Diplomacy events since the last drain (requests, alliances, gifts, signals…). */
+  readonly events: readonly GameEvent[];
+  /** The full diplomacy picture, sent only when something diplomatic happened. */
+  readonly diplomacy: DiplomacySnapshot | null;
+}
+
+/** Alliances and embargoes as flat id pairs. */
+export interface DiplomacySnapshot {
+  /** Allied pairs: a, b, a, b, … */
+  readonly alliances: readonly number[];
+  /** Embargoes from → to: from, to, from, to, … */
+  readonly embargoes: readonly number[];
+}
+
+/** The current alliances and embargoes (for the host's init message and deltas). */
+export function diplomacySnapshot(world: World): DiplomacySnapshot {
+  const split = (keys: Iterable<number>) =>
+    [...keys].sort((a, b) => a - b).flatMap((k) => [Math.floor(k / 0x10000), k % 0x10000]);
+  return {
+    alliances: split(world.diplomacy.alliances),
+    embargoes: split(world.diplomacy.embargoes),
+  };
 }
 
 /** Starts recording changes, so drainDelta can report them. */
 export function trackChanges(world: World): void {
-  world.log ??= { tiles: [], structures: [], shipsLaunched: [], shipsLanded: [] };
+  world.log ??= { tiles: [], structures: [], shipsLaunched: [], shipsLanded: [], events: [] };
 }
 
 /** Collects and clears everything that changed since the last call. */
@@ -89,6 +112,7 @@ export function drainDelta(world: World): TickDelta {
     stats[o + 5] = f.solars;
     stats[o + 6] = f.coronaTroops;
     stats[o + 7] = corona;
+    stats[o + 8] = f.traitorUntil;
   }
 
   const structures = [...new Set(log?.structures ?? [])].map((id) => {
@@ -119,12 +143,14 @@ export function drainDelta(world: World): TickDelta {
       waypoints: s.waypoints.flatMap((p) => [p.x, p.y]),
     }));
   const shipsLanded = [...(log?.shipsLanded ?? [])];
+  const events = [...(log?.events ?? [])];
 
   if (log) {
     log.tiles.length = 0;
     log.structures.length = 0;
     log.shipsLaunched.length = 0;
     log.shipsLanded.length = 0;
+    log.events.length = 0;
   }
   return {
     tick: world.tick,
@@ -134,5 +160,7 @@ export function drainDelta(world: World): TickDelta {
     shipsLaunched,
     shipsLanded,
     winner: world.winner ?? -1,
+    events,
+    diplomacy: events.length > 0 ? diplomacySnapshot(world) : null,
   };
 }

@@ -4,6 +4,7 @@ import type { FactionId, GridId } from "../ids";
 import type { Endpoint, Point } from "../space/space";
 import { coronaArc, coronaTilePoint, pathLength, planFlight } from "../space/space";
 import type { System } from "../tick";
+import { isAllied } from "../world/diplomacy";
 import { setOwner } from "../world/territory";
 import type { Ship, World } from "../world/world";
 import { addTroops, gridOf, isCorona, troopPool } from "../world/world";
@@ -128,7 +129,8 @@ function land(world: World, ship: Ship): void {
   if (!faction.alive) return;
   const grid = gridOf(world, ship.toGrid)!;
   const target = grid.owner[ship.toTile]! as FactionId;
-  if (target === ship.owner) {
+  // Own land reinforces; an ally's land (allied while flying) can't be invaded.
+  if (target === ship.owner || isAllied(world, ship.owner, target)) {
     addTroops(world, faction, ship.toGrid, ship.troops);
     return;
   }

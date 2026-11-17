@@ -10,7 +10,8 @@ import { siphonIncomeMilli } from "./corona";
  * Pays Solars every tick: workers × workerIncomePermille / 1000, scaled by the
  * income modifier of the worlds the faction holds, plus a flat amount per
  * finished Habitat, plus the output of its finished Solar Siphons (by band,
- * with diminishing returns). Fractions are carried in solarsMilli, so nothing
+ * with diminishing returns), times the faction's income bonus (nations on
+ * higher difficulties). Fractions are carried in solarsMilli, so nothing
  * is lost to rounding. Trade income arrives with Freighters (systems/trade).
  */
 export const incomeSystem: System = (world) => {
@@ -25,7 +26,8 @@ export const incomeSystem: System = (world) => {
     );
     const fromHabitats = (habitats[faction.id] ?? 0) * BALANCE.structures.habitat.income * 1000;
     const fromSiphons = siphons ? siphonIncomeMilli(siphons[faction.id]!) : 0;
-    const milli = faction.solarsMilli + fromWorkers + fromHabitats + fromSiphons;
+    const earned = fromWorkers + fromHabitats + fromSiphons;
+    const milli = faction.solarsMilli + Math.floor((earned * faction.bonus.incomePct) / 100);
     faction.solars += Math.floor(milli / 1000);
     faction.solarsMilli = milli % 1000;
   }
