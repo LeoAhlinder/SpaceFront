@@ -70,16 +70,14 @@ export function planFlight(fromId: string, toId: string, tick: number): Flight {
   const speed = BALANCE.ships.landerSpeed;
   const start = bodyPosition(fromId, tick);
   let arrive = tick + BALANCE.ships.minFlightTicks;
-  let waypoints: Point[] = [start, bodyPosition(toId, arrive)];
   for (let i = 0; i < 4; i++) {
     const end = bodyPosition(toId, arrive);
-    waypoints = avoidObstacles(start, end, Math.floor((tick + arrive) / 2), [fromId, toId]);
-    arrive =
-      tick + Math.max(BALANCE.ships.minFlightTicks, Math.ceil(pathLength(waypoints) / speed));
+    const route = avoidObstacles(start, end, Math.floor((tick + arrive) / 2), [fromId, toId]);
+    arrive = tick + Math.max(BALANCE.ships.minFlightTicks, Math.ceil(pathLength(route) / speed));
   }
   // Final aim at the settled arrival time.
   const end = bodyPosition(toId, arrive);
-  waypoints = avoidObstacles(start, end, Math.floor((tick + arrive) / 2), [fromId, toId]);
+  const waypoints = avoidObstacles(start, end, Math.floor((tick + arrive) / 2), [fromId, toId]);
   return { waypoints, arriveTick: arrive };
 }
 
