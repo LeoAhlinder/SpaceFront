@@ -15,7 +15,8 @@ const BORDER_DARKEN = 0.3;
  */
 export class TerritoryLayer {
   readonly sprite: Sprite;
-  readonly side: number;
+  readonly width: number;
+  readonly height: number;
   private readonly pixels: Uint8Array;
   private readonly source: BufferImageSource;
 
@@ -24,41 +25,42 @@ export class TerritoryLayer {
     private readonly owners: Uint16Array,
     private readonly colorOf: (owner: number) => number,
   ) {
-    this.side = grid.radius * 2;
-    this.pixels = new Uint8Array(this.side * this.side * 4);
+    this.width = grid.width;
+    this.height = grid.height;
+    this.pixels = new Uint8Array(this.width * this.height * 4);
     this.source = new BufferImageSource({
       resource: this.pixels,
-      width: this.side,
-      height: this.side,
+      width: this.width,
+      height: this.height,
       scaleMode: "nearest",
     });
     this.sprite = new Sprite(new Texture({ source: this.source }));
-    // Center the disc on the origin; one world unit = one tile.
-    this.sprite.position.set(-this.side / 2, -this.side / 2);
+    // Center the map on the origin; one world unit = one tile.
+    this.sprite.position.set(-this.width / 2, -this.height / 2);
     for (let tile = 0; tile < this.owners.length; tile++) this.paint(tile);
     this.source.update();
   }
 
   /** Redraws the given tiles and their neighbors, then re-uploads the texture. */
   redraw(tiles: readonly number[]): void {
-    const side = this.side;
+    const w = this.width;
     for (const tile of tiles) {
       this.paint(tile);
-      const x = tile % side;
-      if (tile >= side) this.paint(tile - side);
-      if (tile + side < this.owners.length) this.paint(tile + side);
+      const x = tile % w;
+      if (tile >= w) this.paint(tile - w);
+      if (tile + w < this.owners.length) this.paint(tile + w);
       if (x > 0) this.paint(tile - 1);
-      if (x < side - 1) this.paint(tile + 1);
+      if (x < w - 1) this.paint(tile + 1);
     }
     this.source.update();
   }
 
-  /** Tile under a world-space point, or -1 if outside the body. */
+  /** Tile under a world-space point, or -1 if outside the map. */
   tileAt(worldX: number, worldY: number): number {
-    const x = Math.floor(worldX + this.side / 2);
-    const y = Math.floor(worldY + this.side / 2);
-    if (x < 0 || y < 0 || x >= this.side || y >= this.side) return -1;
-    const tile = y * this.side + x;
+    const x = Math.floor(worldX + this.width / 2);
+    const y = Math.floor(worldY + this.height / 2);
+    if (x < 0 || y < 0 || x >= this.width || y >= this.height) return -1;
+    const tile = y * this.width + x;
     return this.grid.terrain[tile] === SPACE ? -1 : tile;
   }
 
@@ -89,14 +91,14 @@ export class TerritoryLayer {
 
   /** True if any edge neighbor on the body has a different owner. */
   private isBorder(tile: number, owner: number): boolean {
-    const side = this.side;
-    const x = tile % side;
+    const w = this.width;
+    const x = tile % w;
     const differs = (t: number) => this.grid.terrain[t] !== SPACE && this.owners[t] !== owner;
     return (
-      (tile >= side && differs(tile - side)) ||
-      (tile + side < this.owners.length && differs(tile + side)) ||
+      (tile >= w && differs(tile - w)) ||
+      (tile + w < this.owners.length && differs(tile + w)) ||
       (x > 0 && differs(tile - 1)) ||
-      (x < side - 1 && differs(tile + 1))
+      (x < w - 1 && differs(tile + 1))
     );
   }
 }

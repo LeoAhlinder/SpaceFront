@@ -1,62 +1,49 @@
 /**
- * Oblique Lambert azimuthal equal-area projection, scaled so the whole globe
- * fits a unit disc. The center point sits in the middle of the disc and its
- * antipode (in the mid-Pacific) is stretched around the rim.
+ * Flat world map: Miller cylindrical projection (a softened Mercator), cropped
+ * to NORTH…SOUTH latitude. It looks like a familiar world map. Countries are
+ * not shown at their true size: land far from the equator is enlarged, which
+ * is fine for a game and gives Europe and North America more room.
  *
- * Equal-area keeps territory fair: every tile covers the same real area, so a
- * country's tile count matches its real size. Shapes stretch toward the rim,
- * which is why the center is chosen so the rim is almost all ocean.
- *
- * Disc coordinates: u to the right (east), v downward (south), both in [-1, 1].
+ * Map coordinates: px from the left edge (longitude −180°) and py from the top
+ * edge (latitude NORTH), both in tiles (fractional).
  */
 const DEG = Math.PI / 180;
 
-/** Center of the disc: west Africa, so the Americas sit left and Asia right. */
-export const CENTER_LON = 10;
-export const CENTER_LAT = 15;
+export const NORTH = 80;
+export const SOUTH = -60;
 
-const lon0 = CENTER_LON * DEG;
-const sinLat0 = Math.sin(CENTER_LAT * DEG);
-const cosLat0 = Math.cos(CENTER_LAT * DEG);
-
-export function project(lonDeg: number, latDeg: number): { u: number; v: number } {
-  const lat = latDeg * DEG;
-  const dLon = lonDeg * DEG - lon0;
-  const cosC = sinLat0 * Math.sin(lat) + cosLat0 * Math.cos(lat) * Math.cos(dLon);
-  const k = Math.sqrt(2 / Math.max(1e-12, 1 + cosC));
-  const x = k * Math.cos(lat) * Math.sin(dLon);
-  const y = k * (cosLat0 * Math.sin(lat) - sinLat0 * Math.cos(lat) * Math.cos(dLon));
-  return { u: x / 2, v: -y / 2 };
+function millerY(latDeg: number): number {
+  return 1.25 * Math.log(Math.tan(Math.PI / 4 + 0.4 * latDeg * DEG));
 }
 
-/** Inverse of `project`. Returns null outside the unit disc. */
-export function unproject(u: number, v: number): { lon: number; lat: number } | null {
-  const x = u * 2;
-  const y = -v * 2;
-  const rho = Math.hypot(x, y);
-  if (rho > 2) return null;
-  if (rho < 1e-12) return { lon: CENTER_LON, lat: CENTER_LAT };
-  const c = 2 * Math.asin(rho / 2);
-  const sinC = Math.sin(c);
-  const cosC = Math.cos(c);
-  const lat = Math.asin(Math.max(-1, Math.min(1, cosC * sinLat0 + (y * sinC * cosLat0) / rho)));
-  const lon = lon0 + Math.atan2(x * sinC, rho * cosLat0 * cosC - y * sinLat0 * sinC);
-  return { lon: normalizeLon(lon / DEG), lat: lat / DEG };
+const Y_TOP = millerY(NORTH);
+const Y_BOTTOM = millerY(SOUTH);
+const Y_RANGE = Y_TOP - Y_BOTTOM;
+
+/** Map height (in tiles) that keeps the projection's proportions for a given width. */
+export function heightForWidth(width: number): number {
+  return Math.round((width * Y_RANGE) / (2 * Math.PI));
 }
 
-function normalizeLon(lon: number): number {
-  return ((((lon + 180) % 360) + 360) % 360) - 180;
-}
-
-/** Disc coordinates of the center of tile (x, y) on a grid with the given side. */
-export function tileCenter(x: number, y: number, side: number): { u: number; v: number } {
-  return { u: (2 * x + 1 - side) / side, v: (2 * y + 1 - side) / side };
-}
-
-/** The tile (x, y) containing disc point (u, v). */
-export function tileAt(u: number, v: number, side: number): { x: number; y: number } {
+export function project(
+  lonDeg: number,
+  latDeg: number,
+  width: number,
+  height: number,
+): { px: number; py: number } {
   return {
-    x: Math.min(side - 1, Math.max(0, Math.floor(((u + 1) * side) / 2))),
-    y: Math.min(side - 1, Math.max(0, Math.floor(((v + 1) * side) / 2))),
+    px: ((lonDeg + 180) / 360) * width,
+    py: ((Y_TOP - millerY(latDeg)) / Y_RANGE) * height,
   };
+}
+
+export function unproject(
+  px: number,
+  py: number,
+  width: number,
+  height: number,
+): { lon: number; lat: number } {
+  const y = Y_TOP - (py / height) * Y_RANGE;
+  const lat = (Math.atan(Math.exp(y / 1.25)) - Math.PI / 4) / 0.4 / DEG;
+  return { lon: (px / width) * 360 - 180, lat };
 }

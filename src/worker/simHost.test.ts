@@ -37,7 +37,7 @@ describe("SimHost", () => {
     const { init } = await started();
     expect(init.playerId).toBe(1);
     expect(init.factions.map((f) => f.kind)).toEqual(["player", "bot", "bot", "bot", "bot", "bot"]);
-    expect(init.grids[0]!.radius).toBe(300);
+    expect([init.grids[0]!.width, init.grids[0]!.height]).toEqual([800, 386]);
     expect(init.spawnPhaseTicks).toBeGreaterThan(0);
   });
 

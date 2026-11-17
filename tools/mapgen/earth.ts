@@ -1,11 +1,11 @@
 /**
- * Builds the Earth map from Natural Earth country shapes (public domain, via
- * the world-atlas package). Run with `npm run mapgen` (optional arg: radius).
+ * Builds the flat Earth map from Natural Earth country shapes (public domain,
+ * via the world-atlas package). Run with `npm run mapgen` (optional arg: width).
  *
  * Steps:
  *   1. Rasterize every country into a 0.1° longitude/latitude grid.
- *   2. For each disc tile, find its longitude/latitude with the inverse
- *      equal-area projection and look up the country there (or ocean).
+ *   2. For each map tile, find its longitude/latitude with the inverse Miller
+ *      projection (tools/mapgen/projection.ts) and look up the country there.
  *   3. Terrain: ocean / ice (Antarctica, Greenland, far north) / land. Land is
  *      split into plains, highlands and mountains with seeded noise. This relief
  *      is invented, not real elevation (a possible upgrade for later).
@@ -21,16 +21,17 @@ import { createRequire } from "node:module";
 import type { FeatureCollection, MultiPolygon, Polygon, Position } from "geojson";
 import { feature } from "topojson-client";
 import type { GeometryCollection, Topology } from "topojson-specification";
-import { DiscGrid } from "../../src/core/grid/discGrid";
+import { RectGrid } from "../../src/core/grid/rectGrid";
 import { Terrain } from "../../src/core/grid/terrain";
 import { gridId } from "../../src/core/ids";
 import type { MapRegion } from "../../src/core/map/terrainMap";
 import { encodeTerrain } from "../../src/core/map/terrainMap";
 import { sphereNoise } from "./noise";
 import { encodePngRgb } from "./png";
-import { tileCenter, unproject } from "./projection";
+import { heightForWidth, unproject } from "./projection";
 
-const RADIUS = Number(process.argv[2] ?? 300);
+const WIDTH = Number(process.argv[2] ?? 800);
+const HEIGHT = heightForWidth(WIDTH);
 const RES = 10; // raster cells per degree
 const RASTER_W = 360 * RES;
 const RASTER_H = 180 * RES;
@@ -150,16 +151,14 @@ function main(): void {
   let poleRings = 0;
   countries.forEach((c, i) => (poleRings += rasterize(raster, c, i + 1)));
 
-  const grid = new DiscGrid(gridId(0), RADIUS);
-  const { side, size, terrain } = grid;
+  const grid = new RectGrid(gridId(0), WIDTH, HEIGHT);
+  const { size, terrain } = grid;
   const countryOf = new Int32Array(size).fill(-1);
   const noise = new Float64Array(size).fill(-1);
   const landNoise: number[] = [];
 
   for (let tile = 0; tile < size; tile++) {
-    if (!grid.isUsable(tile)) continue;
-    const { u, v } = tileCenter(grid.x(tile), grid.y(tile), side);
-    const geo = unproject(u, v)!;
+    const geo = unproject(grid.x(tile) + 0.5, grid.y(tile) + 0.5, WIDTH, HEIGHT);
     const ci = lookup(raster, geo.lon, geo.lat) - 1;
     if (ci < 0) {
       terrain[tile] = Terrain.Ocean;
@@ -196,12 +195,13 @@ function main(): void {
 
   const outDir = new URL("public/maps/earth/", root);
   mkdirSync(outDir, { recursive: true });
-  writeFileSync(new URL("terrain.bin", outDir), encodeTerrain(RADIUS, terrain));
+  writeFileSync(new URL("terrain.bin", outDir), encodeTerrain(WIDTH, HEIGHT, terrain));
   writeFileSync(
     new URL("regions.json", outDir),
     JSON.stringify({
       id: "earth",
-      radius: RADIUS,
+      width: WIDTH,
+      height: HEIGHT,
       source: "Natural Earth 1:50m countries (public domain) via world-atlas 2.0.2",
       regions,
     }),
@@ -213,14 +213,14 @@ function main(): void {
   const counts = new Map<number, number>();
   for (let t = 0; t < size; t++) counts.set(terrain[t]!, (counts.get(terrain[t]!) ?? 0) + 1);
   const name = Object.fromEntries(Object.entries(Terrain).map(([k, v]) => [v, k]));
-  console.log(`Earth: radius ${RADIUS}, ${grid.usableCount} usable tiles`);
+  console.log(`Earth: ${WIDTH}×${HEIGHT} = ${size} tiles`);
   for (const [t, n] of [...counts].sort((a, b) => a[0] - b[0])) {
-    console.log(`  ${name[t]}: ${n} (${((100 * n) / grid.usableCount).toFixed(1)}%)`);
+    console.log(`  ${name[t]}: ${n} (${((100 * n) / size).toFixed(1)}%)`);
   }
   console.log(`  ${regions.length} regions, ${poleRings} pole-circling rings closed`);
 }
 
-function buildRegions(countries: Country[], grid: DiscGrid, countryOf: Int32Array): MapRegion[] {
+function buildRegions(countries: Country[], grid: RectGrid, countryOf: Int32Array): MapRegion[] {
   const sumX = new Float64Array(countries.length);
   const sumY = new Float64Array(countries.length);
   const count = new Int32Array(countries.length);
@@ -261,9 +261,9 @@ const COLORS: Record<number, [number, number, number]> = {
   [Terrain.Ice]: [225, 235, 240],
 };
 
-function preview(grid: DiscGrid, countryOf: Int32Array): Buffer {
-  const { side } = grid;
-  const rgb = new Uint8Array(side * side * 3);
+function preview(grid: RectGrid, countryOf: Int32Array): Buffer {
+  const { width, height } = grid;
+  const rgb = new Uint8Array(width * height * 3);
   for (let tile = 0; tile < grid.size; tile++) {
     const [r, g, b] = COLORS[grid.terrain[tile]!]!;
     const x = grid.x(tile);
@@ -271,12 +271,14 @@ function preview(grid: DiscGrid, countryOf: Int32Array): Buffer {
     // Darken tiles on a country border (right or lower neighbor in another country).
     const border =
       ci >= 0 &&
-      ((x + 1 < side && countryOf[tile + 1]! >= 0 && countryOf[tile + 1] !== ci) ||
-        (tile + side < grid.size && countryOf[tile + side]! >= 0 && countryOf[tile + side] !== ci));
+      ((x + 1 < width && countryOf[tile + 1]! >= 0 && countryOf[tile + 1] !== ci) ||
+        (tile + width < grid.size &&
+          countryOf[tile + width]! >= 0 &&
+          countryOf[tile + width] !== ci));
     const k = border ? 0.55 : 1;
     rgb.set([r * k, g * k, b * k], tile * 3);
   }
-  return encodePngRgb(side, side, rgb);
+  return encodePngRgb(width, height, rgb);
 }
 
 main();

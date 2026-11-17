@@ -10,7 +10,7 @@ export { TICK_MS } from "./constants";
 export { drainDelta, FACTION_STATS_STRIDE, trackChanges } from "./delta/delta";
 export type { TickDelta } from "./delta/delta";
 export { assert, AssertionError } from "./debug";
-export { DiscGrid } from "./grid/discGrid";
+export { RectGrid } from "./grid/rectGrid";
 export { isOwnableTerrain, Terrain, TERRAIN_COST_PCT } from "./grid/terrain";
 export type { TileGrid } from "./grid/tileGrid";
 export { factionId, gridId, MAX_FACTION_ID, NEUTRAL } from "./ids";

@@ -28,7 +28,11 @@ const TICKS = 5_000;
 function play(seed: number): { world: World; hashes: number[]; rejected: number; ms: number } {
   const start = performance.now();
   const world = createWorld(
-    { seed, difficulty: "normal", bodies: [{ radius: earth.radius, mapId: "earth" }] },
+    {
+      seed,
+      difficulty: "normal",
+      bodies: [{ width: earth.width, height: earth.height, mapId: "earth" }],
+    },
     new Map([["earth", earth]]),
   );
   for (let i = 1; i <= BOTS; i++) addBot(world, `Bot ${i}`);

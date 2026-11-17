@@ -11,8 +11,12 @@ import type { World } from "../world/world";
 import { addFaction, createWorld } from "../world/world";
 import { addBot, aiSystem } from "./bot";
 
-function emptyWorld(radius = 20, seed = 3): World {
-  return createWorld({ seed, difficulty: "normal", bodies: [{ radius }] });
+function emptyWorld(half = 20, seed = 3): World {
+  return createWorld({
+    seed,
+    difficulty: "normal",
+    bodies: [{ width: 2 * half, height: 2 * half }],
+  });
 }
 
 /** Checks that every faction's tile list, tile count and the owner map agree. */
@@ -101,7 +105,7 @@ describe("bots", () => {
     runTicks(world, 2_000);
     const alive = world.factions.filter((f) => f.alive);
     const owned = alive.reduce((sum, f) => sum + f.tileCount, 0);
-    expect(owned).toBeGreaterThan(grid0(world).usableCount * 0.9);
+    expect(owned).toBeGreaterThan(grid0(world).size * 0.9);
     expectTileListsConsistent(world);
   });
 });

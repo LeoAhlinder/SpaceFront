@@ -55,7 +55,7 @@ SpaceFront/
 │   ├── core/              Pure deterministic simulation. No DOM, no Pixi, no timers.
 │   │   ├── math/          Fixed-point helpers, sin/cos lookup table, seeded RNG
 │   │   ├── world/         World, Body, Corona, Faction, Unit, Structure types
-│   │   ├── grid/          TileGrid interface, DiscGrid (planets), PolarGrid (Corona)
+│   │   ├── grid/          TileGrid interface, RectGrid (flat planet maps), PolarGrid (Corona)
 │   │   ├── systems/       One file per system (growth, income, attack, ships, …)
 │   │   ├── commands/      Command types, validation, CommandQueue
 │   │   ├── ai/            Bot AI, Nation AI, AI profiles
@@ -168,7 +168,7 @@ interface TileGrid {
 
 | Grid        | Used for                  | Shape                                                                                     |
 | ----------- | ------------------------- | ----------------------------------------------------------------------------------------- |
-| `DiscGrid`  | Planets, moons, asteroids | Square grid cut into a circle. Tiles outside the circle are space and can't be owned.     |
+| `RectGrid`  | Planets, moons, asteroids | A flat rectangular map, like a world map in a strategy game. No wrap-around at the edges. |
 | `PolarGrid` | The Corona                | `rings × sectors`. Sectors wrap around. Each ring belongs to a band (inner/middle/outer). |
 
 A tile is identified by `(gridId, index)`. Code in hot loops only works with plain `number` indexes.
@@ -289,7 +289,7 @@ Deltas are the only thing that leaves the worker each tick.
   8. Selection, hover and target markers
 - **Corona:** its `PolarGrid` texture is drawn onto a ring mesh, so polar tiles appear as curved segments.
 - **Interpolation:** the renderer runs at the display frame rate. It moves body and ship positions smoothly between the last two ticks.
-- **Level of detail:** zoomed out, planets become discs colored by their main owner, and ships are grouped into counters.
+- **Level of detail:** zoomed out, planets become small icons colored by their main owner, and ships are grouped into counters.
 - **Camera:** pan, zoom toward the cursor, follow a body (the camera moves along with its orbit).
 
 ---
@@ -306,14 +306,14 @@ Deltas are the only thing that leaves the worker each tick.
 ## 8. Data and content (`src/data`, `assets`, `tools`)
 
 - **Balance constants** (costs, growth rates, siphon output) live in `data/balance.ts`. There are no magic numbers in systems.
-- **Bodies** (`data/bodies.ts`): radius, orbit, terrain profile, modifiers.
+- **Bodies** (`data/bodies.ts`): map size, orbit, terrain profile, modifiers.
 - **Nations** (`data/nations.ts`): name, flag, tier, colors, Earth spawn region, which colonies they may have.
 - **Difficulty** (`data/difficulty.ts`): which tiers appear, how many colonies, which AI profiles.
 - **Maps** live in `public/maps/<id>/` as two committed files:
   - `terrain.bin`: terrain per tile, run-length encoded (format in `core/map/terrainMap.ts`). A binary file instead of a PNG because browsers may color-correct images, which would change terrain values.
-  - `regions.json`: map id, radius, and named regions (countries) with a spawn tile each.
-  - `loadTerrainMap` in core validates both files. `createWorld(config, maps)` copies the terrain into the body's `DiscGrid`. Loading the files from disk or network is the host's job (worker or tests), not core's.
-  - **Earth** (`npm run mapgen`, `tools/mapgen/earth.ts`): Natural Earth countries, rasterized and projected onto the disc with an **oblique Lambert azimuthal equal-area** projection centered on 10°E 15°N. Every tile covers the same real area, Africa sits in the middle, and the mid-Pacific is stretched around the rim. Highlands and mountains come from seeded noise, not real elevation. A preview image goes to `docs/maps/earth-preview.png`.
+  - `regions.json`: map id, width, height, and named regions (countries) with a spawn tile each.
+  - `loadTerrainMap` in core validates both files. `createWorld(config, maps)` copies the terrain into the body's `RectGrid`. Loading the files from disk or network is the host's job (worker or tests), not core's.
+  - **Earth** (`npm run mapgen`, `tools/mapgen/earth.ts`): Natural Earth countries, rasterized onto a flat 800×386 map with the **Miller cylindrical** projection (a softened Mercator) from 80°N to 60°S. It looks like a familiar world map. Countries are not shown at their true size (land far from the equator is enlarged), and Antarctica is cut off. Highlands and mountains come from seeded noise, not real elevation. A preview image goes to `docs/maps/earth-preview.png`.
   - **Other bodies** (M1): generated procedurally from a seed with noise, in the same file format.
 - Sprites are packed into an atlas by `tools/atlas`.
 

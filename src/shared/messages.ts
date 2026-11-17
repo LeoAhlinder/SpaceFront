@@ -31,7 +31,8 @@ export interface MatchInit {
 
 export interface GridInit {
   readonly id: number;
-  readonly radius: number;
+  readonly width: number;
+  readonly height: number;
   /** Terrain per tile (copied, so the worker's world stays private). */
   readonly terrain: Uint8Array;
   readonly owner: Uint16Array;

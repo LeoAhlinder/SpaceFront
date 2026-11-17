@@ -31,7 +31,8 @@ export function hashWorld(world: World): number {
   h.int(world.grids.length);
   for (const g of world.grids) {
     h.int(g.id);
-    h.int(g.radius);
+    h.int(g.width);
+    h.int(g.height);
     h.words(g.owner);
     h.words(g.terrain);
   }

@@ -1,7 +1,7 @@
 import type { GridId } from "../ids";
 
 /**
- * A territory surface. Planets use DiscGrid, the Corona will use PolarGrid (M2.5).
+ * A territory surface. Planets and moons use RectGrid (flat maps), the Corona will use PolarGrid (M2.5).
  * Systems only use this interface, so they work on any surface shape.
  *
  * Tiles are plain integer indexes in [0, size). Per-tile data lives in typed

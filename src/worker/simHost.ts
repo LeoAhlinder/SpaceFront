@@ -75,7 +75,7 @@ export class SimHost {
     const config: MatchConfig = {
       seed: setup.seed,
       difficulty: "normal",
-      bodies: [{ radius: map.radius, mapId: map.id }],
+      bodies: [{ width: map.width, height: map.height, mapId: map.id }],
       spawnPhaseTicks: BALANCE.match.spawnPhaseTicks,
     };
     const world = createWorld(config, new Map([[map.id, map]]));
@@ -92,7 +92,8 @@ export class SimHost {
       winLandPct: BALANCE.match.winLandPct,
       grids: world.grids.map((g) => ({
         id: g.id,
-        radius: g.radius,
+        width: g.width,
+        height: g.height,
         terrain: g.terrain.slice(),
         owner: g.owner.slice(),
       })),

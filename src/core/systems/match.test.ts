@@ -11,7 +11,7 @@ describe("spawn phase", () => {
     const world = createWorld({
       seed: 1,
       difficulty: "normal",
-      bodies: [{ radius: 20 }],
+      bodies: [{ width: 40, height: 40 }],
       spawnPhaseTicks: 30,
     });
     addFaction(world, "A", "player");

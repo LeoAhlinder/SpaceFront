@@ -1,7 +1,7 @@
 import { isOwnableTerrain } from "../grid/terrain";
 
 /**
- * Map data for one body: its radius, terrain per tile, and named regions
+ * Map data for one body: its size, terrain per tile, and named regions
  * (on Earth: countries, with a spawn tile each).
  *
  * Terrain is shipped as a small run-length-encoded binary file rather than an
@@ -9,8 +9,9 @@ import { isOwnableTerrain } from "../grid/terrain";
  */
 export interface TerrainMap {
   readonly id: string;
-  readonly radius: number;
-  /** Terrain value per tile, laid out like DiscGrid (side = 2·radius). */
+  readonly width: number;
+  readonly height: number;
+  /** Terrain value per tile, laid out like RectGrid (index = y × width + x). */
   readonly terrain: Uint8Array;
   readonly regions: readonly MapRegion[];
 }
@@ -26,18 +27,19 @@ export interface MapRegion {
 }
 
 // File layout (little-endian):
-//   "SFM1"                magic
-//   uint16 radius
-//   uint32 tile count     must equal (2·radius)²
+//   "SFM2"                magic
+//   uint16 width
+//   uint16 height
+//   uint32 tile count     must equal width × height
 //   repeated runs:        uint16 length (1–65535), uint8 terrain value
-const MAGIC = [0x53, 0x46, 0x4d, 0x31]; // "SFM1"
-const HEADER_BYTES = 10;
+const MAGIC = [0x53, 0x46, 0x4d, 0x32]; // "SFM2"
+const HEADER_BYTES = 12;
 const MAX_RUN = 0xffff;
 
 /** Encodes a terrain array (used by tools/mapgen). */
-export function encodeTerrain(radius: number, terrain: Uint8Array): Uint8Array {
-  const size = 4 * radius * radius;
-  if (terrain.length !== size) throw new RangeError("terrain length doesn't match radius");
+export function encodeTerrain(width: number, height: number, terrain: Uint8Array): Uint8Array {
+  const size = width * height;
+  if (terrain.length !== size) throw new RangeError("terrain length doesn't match size");
   const runs: number[] = [];
   for (let i = 0; i < size;) {
     const value = terrain[i]!;
@@ -49,21 +51,27 @@ export function encodeTerrain(radius: number, terrain: Uint8Array): Uint8Array {
   const out = new Uint8Array(HEADER_BYTES + runs.length);
   out.set(MAGIC, 0);
   const view = new DataView(out.buffer);
-  view.setUint16(4, radius, true);
-  view.setUint32(6, size, true);
+  view.setUint16(4, width, true);
+  view.setUint16(6, height, true);
+  view.setUint32(8, size, true);
   out.set(runs, HEADER_BYTES);
   return out;
 }
 
 /** Decodes a terrain file. Throws on anything malformed (files come from outside). */
-export function decodeTerrain(bytes: Uint8Array): { radius: number; terrain: Uint8Array } {
+export function decodeTerrain(bytes: Uint8Array): {
+  width: number;
+  height: number;
+  terrain: Uint8Array;
+} {
   if (bytes.length < HEADER_BYTES || MAGIC.some((b, i) => bytes[i] !== b)) {
     throw new Error("Not a SpaceFront terrain file");
   }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const radius = view.getUint16(4, true);
-  const size = view.getUint32(6, true);
-  if (radius < 1 || size !== 4 * radius * radius) throw new Error("Bad terrain header");
+  const width = view.getUint16(4, true);
+  const height = view.getUint16(6, true);
+  const size = view.getUint32(8, true);
+  if (width < 1 || height < 1 || size !== width * height) throw new Error("Bad terrain header");
   if ((bytes.length - HEADER_BYTES) % 3 !== 0) throw new Error("Truncated terrain data");
 
   const terrain = new Uint8Array(size);
@@ -75,7 +83,7 @@ export function decodeTerrain(bytes: Uint8Array): { radius: number; terrain: Uin
     at += length;
   }
   if (at !== size) throw new Error("Terrain data too short");
-  return { radius, terrain };
+  return { width, height, terrain };
 }
 
 /**
@@ -83,11 +91,13 @@ export function decodeTerrain(bytes: Uint8Array): { radius: number; terrain: Uin
  * parsed regions JSON. Validates everything, since files come from outside.
  */
 export function loadTerrainMap(terrainBytes: Uint8Array, info: unknown): TerrainMap {
-  const { radius, terrain } = decodeTerrain(terrainBytes);
+  const { width, height, terrain } = decodeTerrain(terrainBytes);
   if (!isRecord(info) || typeof info["id"] !== "string" || !Array.isArray(info["regions"])) {
     throw new Error("Bad map info");
   }
-  if (info["radius"] !== radius) throw new Error("Map info radius doesn't match terrain");
+  if (info["width"] !== width || info["height"] !== height) {
+    throw new Error("Map info size doesn't match terrain");
+  }
   const regions = info["regions"].map((r: unknown): MapRegion => {
     if (
       !isRecord(r) ||
@@ -104,7 +114,7 @@ export function loadTerrainMap(terrainBytes: Uint8Array, info: unknown): Terrain
     }
     return { code: r["code"], name: r["name"], spawnTile, tileCount: r["tileCount"] as number };
   });
-  return { id: info["id"], radius, terrain, regions };
+  return { id: info["id"], width, height, terrain, regions };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

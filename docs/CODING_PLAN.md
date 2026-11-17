@@ -8,7 +8,7 @@ How to read the tasks: each one is roughly one PR. `☐` = not started.
 
 ## M0 — Prototype: Earth only
 
-**Goal:** a single Earth disc in the browser. You pick a spawn, expand with the attack slider and fight dumb bots.
+**Goal:** a single flat Earth map in the browser. You pick a spawn, expand with the attack slider and fight dumb bots.
 
 ### M0.1 Project setup
 
@@ -22,7 +22,7 @@ How to read the tasks: each one is roughly one PR. `☐` = not started.
 
 - ☑ `core/math`: seeded RNG, fixed-point helpers, trig lookup table + `tools/gen-trig.ts`
 - ☑ `core/world`: `World`, `Faction`, `MatchConfig` types; `createWorld(config)`
-- ☑ `core/grid`: `TileGrid` interface + `DiscGrid` with neighbors and tests
+- ☑ `core/grid`: `TileGrid` interface + a grid with neighbors and tests (now `RectGrid`: flat maps)
 - ☑ Tick runner: runs systems in order, increments `tick`
 - ☑ `hashWorld` + the first determinism test (empty world, 1,000 ticks, two runs, same hash)
 
@@ -36,8 +36,8 @@ How to read the tasks: each one is roughly one PR. `☐` = not started.
 
 ### M0.4 Earth map
 
-- ☑ `tools/mapgen`: public-domain world data → equal-area disc projection → run-length-encoded terrain + spawn regions JSON (+ preview PNG)
-- ☑ Map loader in core, from the generated data into `DiscGrid`
+- ☑ `tools/mapgen`: public-domain world data → flat world map (Miller projection) → run-length-encoded terrain + spawn regions JSON (+ preview PNG)
+- ☑ Map loader in core, from the generated data into the grid
 - ☑ `assets/CREDITS.md` with the map data source and its license
 
 ### M0.5 Bots
@@ -66,7 +66,7 @@ Status: playable in the browser against 40 bots. Checked in the desktop app's bu
 
 **Goal:** all bodies on orbits, and invading other bodies with Troop Landers.
 
-- ☐ `data/bodies.ts`: every body from the gameplay plan with radius, orbit, terrain profile, modifiers
+- ☐ `data/bodies.ts`: every body from the gameplay plan with map size, orbit, terrain profile, modifiers
 - ☐ Procedural terrain generator for non-Earth bodies (seeded noise → same PNG format as Earth)
 - ☐ `orbitSystem`: positions from the tick number; compressed distances and orbit times
 - ☐ The Sun and its heat zone; gas giants as obstacles
@@ -165,11 +165,11 @@ Status: playable in the browser against 40 bots. Checked in the desktop app's bu
 
 **Order inside a milestone:** core + tests first → worker/delta → render → UI. Core features are always playable through the debug UI before they get polished.
 
-| Risk                                           | Mitigation                                                                                                                                               |
-| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Desyncs appear later when multiplayer is added | Determinism tests and replay hashes from M0, banned APIs enforced by lint                                                                                |
-| Performance with many tiles, ships and AI      | Typed arrays, incremental frontiers, benchmarks from M0, staggered AI                                                                                    |
-| Planet orbits make routes confusing            | Show arrival time and predicted target position when choosing a destination                                                                              |
-| A disc projection of Earth looks odd           | Done in M0.4: an oblique equal-area projection centered near Africa keeps the rim mostly ocean. East Asia and Australia are still stretched at the edge. |
-| Nation AI takes longer than expected           | Bots ship first; nations reuse the bot code and only add scoring                                                                                         |
-| Steam needs an Electron-specific setup         | `Platform` interface from M0, so only one module changes                                                                                                 |
+| Risk                                           | Mitigation                                                                              |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Desyncs appear later when multiplayer is added | Determinism tests and replay hashes from M0, banned APIs enforced by lint               |
+| Performance with many tiles, ships and AI      | Typed arrays, incremental frontiers, benchmarks from M0, staggered AI                   |
+| Planet orbits make routes confusing            | Show arrival time and predicted target position when choosing a destination             |
+| Earth map looks odd                            | Resolved: bodies are flat rectangular maps, and Earth uses a familiar Miller world map. |
+| Nation AI takes longer than expected           | Bots ship first; nations reuse the bot code and only add scoring                        |
+| Steam needs an Electron-specific setup         | `Platform` interface from M0, so only one module changes                                |

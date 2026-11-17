@@ -1,6 +1,6 @@
 import { BALANCE } from "../../data/balance";
 import { CommandQueue } from "../commands/commandQueue";
-import { DiscGrid } from "../grid/discGrid";
+import { RectGrid } from "../grid/rectGrid";
 import { isOwnableTerrain } from "../grid/terrain";
 import type { FactionId, GridId } from "../ids";
 import { factionId, gridId, MAX_FACTION_ID, NEUTRAL } from "../ids";
@@ -15,7 +15,9 @@ export type FactionKind = "neutral" | "player" | "bot" | "nation";
 
 /** One body in the match. */
 export interface BodyConfig {
-  readonly radius: number;
+  /** Flat map size in tiles. */
+  readonly width: number;
+  readonly height: number;
   /** Map to load terrain from (e.g. "earth"). Without one, the body is all plains. */
   readonly mapId?: string;
 }
@@ -89,7 +91,7 @@ export interface World {
   readonly config: MatchConfig;
   readonly rng: Rng;
   /** One grid per body, indexed by GridId. */
-  readonly grids: DiscGrid[];
+  readonly grids: RectGrid[];
   /** Indexed by FactionId. Index 0 is the neutral faction. */
   readonly factions: Faction[];
   /** Per grid, per tile: the tile's index in its owner's `tiles` list (-1 if neutral). */
@@ -141,7 +143,7 @@ export function createWorld(
   return world;
 }
 
-function countOwnable(grid: DiscGrid): number {
+function countOwnable(grid: RectGrid): number {
   let n = 0;
   for (let i = 0; i < grid.size; i++) if (isOwnableTerrain(grid.terrain[i]!)) n++;
   return n;
@@ -153,12 +155,14 @@ export function inSpawnPhase(world: World): boolean {
 }
 
 function createGrid(index: number, body: BodyConfig, maps: ReadonlyMap<string, TerrainMap>) {
-  const grid = new DiscGrid(gridId(index), body.radius);
+  const grid = new RectGrid(gridId(index), body.width, body.height);
   if (body.mapId !== undefined) {
     const map = maps.get(body.mapId);
     if (!map) throw new Error(`Map "${body.mapId}" was not provided`);
-    if (map.radius !== body.radius) {
-      throw new Error(`Map "${body.mapId}" has radius ${map.radius}, body has ${body.radius}`);
+    if (map.width !== body.width || map.height !== body.height) {
+      throw new Error(
+        `Map "${body.mapId}" is ${map.width}×${map.height}, body is ${body.width}×${body.height}`,
+      );
     }
     grid.applyTerrain(map.terrain);
   }

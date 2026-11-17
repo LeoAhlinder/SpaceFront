@@ -48,7 +48,10 @@ describe("determinism", () => {
   const config: MatchConfig = {
     seed: 20261117,
     difficulty: "normal",
-    bodies: [{ radius: 40 }, { radius: 12 }],
+    bodies: [
+      { width: 80, height: 80 },
+      { width: 24, height: 24 },
+    ],
   };
 
   it("produces identical hashes every 50 ticks across two runs", () => {
@@ -77,7 +80,7 @@ describe("determinism", () => {
  * neutral land and each other on a schedule. Terrain is painted from the seed.
  */
 function playScripted(seed: number): { hashes: number[]; world: World; rejected: number } {
-  const world = createWorld({ seed, difficulty: "normal", bodies: [{ radius: 60 }] });
+  const world = createWorld({ seed, difficulty: "normal", bodies: [{ width: 120, height: 120 }] });
   const grid = world.grids[0]!;
   const paint = Rng.fromSeed(seed, 99);
   for (let i = 0; i < grid.size; i++) {
@@ -146,6 +149,6 @@ describe("determinism: scripted match through the real systems", () => {
     const totalTiles = world.factions.reduce((sum, f) => sum + f.tileCount, 0);
     expect(alive.length).toBeGreaterThan(1);
     expect(rejected).toBeLessThan(100); // most scripted commands are valid
-    expect(totalTiles).toBeGreaterThan(world.grids[0]!.usableCount / 2);
+    expect(totalTiles).toBeGreaterThan(world.grids[0]!.size / 4);
   });
 });

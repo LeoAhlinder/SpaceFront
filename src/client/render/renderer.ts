@@ -45,7 +45,9 @@ export class GameRenderer {
     );
     for (const layer of this.layers) this.world.addChild(layer.sprite);
     const first = this.layers[0];
-    if (first) this.camera.fit(first.side, this.app.screen.width, this.app.screen.height);
+    if (first) {
+      this.camera.fit(first.width, first.height, this.app.screen.width, this.app.screen.height);
+    }
   }
 
   /** The tile under a screen point, if any. */

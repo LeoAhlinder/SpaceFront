@@ -3,7 +3,7 @@ import type { System } from "./tick";
 import { runTick, runTicks } from "./tick";
 import { createWorld } from "./world/world";
 
-const config = { seed: 1, difficulty: "normal", bodies: [{ radius: 4 }] } as const;
+const config = { seed: 1, difficulty: "normal", bodies: [{ width: 8, height: 8 }] } as const;
 
 describe("runTick", () => {
   it("runs systems in order with the current tick, then advances", () => {

@@ -44,7 +44,9 @@ describe("validateCommand", () => {
     expect(validateCommand(world, spawn(world, 1, 10, 10))).toBeNull();
     expect(validateCommand(world, spawn(world, 9, 10, 10))).toBe("unknown faction");
     expect(validateCommand(world, spawn(world, 0, 10, 10))).toBe("unknown faction");
-    expect(validateCommand(world, spawn(world, 1, 0, 0))).toBe("tile is not on the body");
+    expect(validateCommand(world, { ...spawn(world, 1, 0, 0), tile: grid.size } as Command)).toBe(
+      "tile is not on the body",
+    );
     expect(validateCommand(world, { ...spawn(world, 1, 10, 10), grid: 5 } as Command)).toBe(
       "unknown grid",
     );

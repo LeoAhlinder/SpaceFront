@@ -44,10 +44,10 @@ describe("spawn", () => {
   it("skips ocean and other factions' land", () => {
     const world = testWorld(20);
     const grid = grid0(world);
-    for (let y = 0; y < grid.side; y++) grid.terrain[grid.index(21, y)] = Terrain.Ocean;
+    for (let y = 0; y < grid.width; y++) grid.terrain[grid.index(21, y)] = Terrain.Ocean;
     runWith(world, spawn(world, 2, 20, 17));
     runWith(world, spawn(world, 1, 20, 20));
-    for (let y = 0; y < grid.side; y++) expect(grid.owner[grid.index(21, y)]).toBe(NEUTRAL);
+    for (let y = 0; y < grid.width; y++) expect(grid.owner[grid.index(21, y)]).toBe(NEUTRAL);
     expect(grid.owner[grid.index(20, 17)]).toBe(2);
     expect(countOwned(world, 1) + countOwned(world, 2)).toBe(
       faction(world, 1).tileCount + faction(world, 2).tileCount,
@@ -106,7 +106,7 @@ describe("attack", () => {
     // Attack only: population would shrink the (far above cap) troop count.
     runTicks(world, 200, [attackSystem]);
     expect(world.attacks).toHaveLength(0);
-    expect(f.tileCount).toBe(grid0(world).usableCount);
+    expect(f.tileCount).toBe(grid0(world).size);
     expect(f.troops).toBeGreaterThan(980_000); // the unused troops came back
   });
 
@@ -133,12 +133,12 @@ describe("attack", () => {
   it("never takes ocean", () => {
     const world = testWorld(12);
     const grid = grid0(world);
-    for (let y = 0; y < grid.side; y++) grid.terrain[grid.index(16, y)] = Terrain.Ocean;
+    for (let y = 0; y < grid.width; y++) grid.terrain[grid.index(16, y)] = Terrain.Ocean;
     runWith(world, spawn(world, 1, 10, 12));
     faction(world, 1).troops = 1_000_000;
     runWith(world, attack(world, 1, 14, 12));
     runTicks(world, 200);
-    for (let y = 0; y < grid.side; y++) expect(grid.owner[grid.index(16, y)]).toBe(NEUTRAL);
+    for (let y = 0; y < grid.width; y++) expect(grid.owner[grid.index(16, y)]).toBe(NEUTRAL);
     // Land beyond the ocean line is unreachable.
     expect(grid.owner[grid.index(18, 12)]).toBe(NEUTRAL);
   });

@@ -14,9 +14,9 @@ export class Camera {
     return this.world.scale.x;
   }
 
-  /** Centers a square of `size` world units on screen, filling `fill` of the shorter side. */
-  fit(size: number, screenW: number, screenH: number, fill = 0.92): void {
-    const zoom = clamp((Math.min(screenW, screenH) * fill) / size, MIN_ZOOM, MAX_ZOOM);
+  /** Centers a width × height area of world units on screen, filling `fill` of it. */
+  fit(width: number, height: number, screenW: number, screenH: number, fill = 0.96): void {
+    const zoom = clamp(Math.min(screenW / width, screenH / height) * fill, MIN_ZOOM, MAX_ZOOM);
     this.world.scale.set(zoom);
     this.world.position.set(screenW / 2, screenH / 2);
   }

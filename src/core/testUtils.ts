@@ -1,7 +1,7 @@
 /** Helpers for core unit tests. Not exported from core/index.ts. */
 import { queueCommand } from "./commands/applyCommands";
 import type { Command } from "./commands/commands";
-import type { DiscGrid } from "./grid/discGrid";
+import type { RectGrid } from "./grid/rectGrid";
 import type { FactionId, GridId } from "./ids";
 import { gridId } from "./ids";
 import type { TickContext } from "./tick";
@@ -11,14 +11,21 @@ import { addFaction, createWorld } from "./world/world";
 
 export const G0: GridId = gridId(0);
 
-/** A world with one disc of the given radius and `factions` bot factions. */
-export function testWorld(radius = 20, factions = 2, seed = 1): World {
-  const world = createWorld({ seed, difficulty: "normal", bodies: [{ radius }] });
+/**
+ * A world with one square map of side 2 × `half` (so tile (half, half) is the
+ * middle) and `factions` bot factions.
+ */
+export function testWorld(half = 20, factions = 2, seed = 1): World {
+  const world = createWorld({
+    seed,
+    difficulty: "normal",
+    bodies: [{ width: 2 * half, height: 2 * half }],
+  });
   for (let i = 1; i <= factions; i++) addFaction(world, `F${i}`, "bot");
   return world;
 }
 
-export function grid0(world: World): DiscGrid {
+export function grid0(world: World): RectGrid {
   return world.grids[0]!;
 }
 

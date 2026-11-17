@@ -14,24 +14,21 @@ import {
   runTicks,
   Terrain,
 } from "../../src/core";
-import { project, tileAt } from "../../tools/mapgen/projection";
+import { project } from "../../tools/mapgen/projection";
 
 const dir = new URL("../../public/maps/earth/", import.meta.url);
 const earth: TerrainMap = loadTerrainMap(
   new Uint8Array(readFileSync(new URL("terrain.bin", dir))),
   JSON.parse(readFileSync(new URL("regions.json", dir), "utf8")),
 );
-const side = earth.radius * 2;
-
 function terrainAt(lon: number, lat: number): number {
-  const { u, v } = project(lon, lat);
-  const { x, y } = tileAt(u, v, side);
-  return earth.terrain[y * side + x]!;
+  const { px, py } = project(lon, lat, earth.width, earth.height);
+  return earth.terrain[Math.floor(py) * earth.width + Math.floor(px)]!;
 }
 
 describe("Earth map", () => {
-  it("has radius 300 and roughly Earth's land share (~29%)", () => {
-    expect(earth.radius).toBe(300);
+  it("is a flat 800×386 map with plenty of land", () => {
+    expect([earth.width, earth.height]).toEqual([800, 386]);
     let usable = 0;
     let land = 0;
     for (const t of earth.terrain) {
@@ -39,8 +36,9 @@ describe("Earth map", () => {
       usable++;
       if (t !== Terrain.Ocean) land++;
     }
+    // Not equal-area: land far from the equator is enlarged, so a bit above Earth's 29%.
     expect(land / usable).toBeGreaterThan(0.25);
-    expect(land / usable).toBeLessThan(0.32);
+    expect(land / usable).toBeLessThan(0.36);
   });
 
   it("puts land and sea in the right places", () => {
@@ -50,8 +48,8 @@ describe("Earth map", () => {
     expect(terrainAt(-46.6, -23.5)).not.toBe(Terrain.Ocean); // São Paulo
     expect(terrainAt(-30, 30)).toBe(Terrain.Ocean); // mid-Atlantic
     expect(terrainAt(80, -10)).toBe(Terrain.Ocean); // Indian Ocean
-    expect(terrainAt(0, -80)).toBe(Terrain.Ice); // Antarctica
     expect(terrainAt(-40, 72)).toBe(Terrain.Ice); // Greenland
+    expect(terrainAt(-45, 66)).toBe(Terrain.Ice); // Greenland, south
   });
 
   it("has the major countries, with Russia largest", () => {
@@ -72,7 +70,11 @@ describe("Earth map", () => {
 
   it("plays: two nations spawn on their countries and expand", () => {
     const world = createWorld(
-      { seed: 5, difficulty: "normal", bodies: [{ radius: earth.radius, mapId: "earth" }] },
+      {
+        seed: 5,
+        difficulty: "normal",
+        bodies: [{ width: earth.width, height: earth.height, mapId: "earth" }],
+      },
       new Map([["earth", earth]]),
     );
     const region = (code: string) => earth.regions.find((r) => r.code === code)!;

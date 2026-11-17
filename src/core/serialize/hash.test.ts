@@ -3,7 +3,7 @@ import { AssertionError } from "../debug";
 import { addFaction, createWorld } from "../world/world";
 import { hashWorld } from "./hash";
 
-const config = { seed: 9, difficulty: "normal", bodies: [{ radius: 6 }] } as const;
+const config = { seed: 9, difficulty: "normal", bodies: [{ width: 12, height: 12 }] } as const;
 
 describe("hashWorld", () => {
   it("is equal for two identically built worlds", () => {
