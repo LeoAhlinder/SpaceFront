@@ -29,10 +29,17 @@ export {
   diplomacySnapshot,
   drainDelta,
   FACTION_STATS_STRIDE,
+  snapshotViews,
   trackChanges,
   WARSHIP_STRIDE,
 } from "./delta/delta";
-export type { DiplomacySnapshot, ShipView, StructureView, TickDelta } from "./delta/delta";
+export type {
+  DiplomacySnapshot,
+  ShipView,
+  StructureView,
+  TickDelta,
+  WorldSnapshot,
+} from "./delta/delta";
 export { assert, AssertionError } from "./debug";
 export { Band, BAND_KEYS, PolarGrid } from "./grid/polarGrid";
 export { RectGrid } from "./grid/rectGrid";
@@ -46,6 +53,8 @@ export * from "./math/fixed";
 export { Rng } from "./math/rng";
 export { ANGLE_FULL, ANGLE_HALF, ANGLE_QUARTER, fxCos, fxSin } from "./math/trig";
 export { hashWorld } from "./serialize/hash";
+export { loadWorld, readSaveHeader, SAVE_FORMAT_VERSION, saveWorld } from "./serialize/save";
+export type { LoadedSave } from "./serialize/save";
 export {
   bodyPosition,
   coronaArc,

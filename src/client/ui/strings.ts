@@ -159,6 +159,27 @@ export const strings = {
   pausedHint: (key: string) => `Paused · ${key} to resume`,
   restartNow: "Restart now",
   saveGame: "Save game",
+  gameSaved: "Game saved",
+  quickSaved: "Quick save done",
+  saveFailed: "Saving failed",
+  replaySaved: "Replay saved",
+  saveReplay: "Save replay",
+  noSaves: "No saved games yet. Save from the in-game menu (Esc) or with the quick-save key.",
+  noReplays: "No replays yet. Save one when a match ends, or from the in-game menu.",
+  load: "Load",
+  watch: "Watch",
+  delete: "Delete",
+  quickSave: "Quick save",
+  entryInfo: (difficulty: string, time: string, landPct: number) =>
+    `${difficulty} · ${time} played · ${landPct.toFixed(1)}% of the land`,
+  savedOn: (when: string) => when,
+  replay: "Replay",
+  replaySpeed: (speed: number) => `${speed}×`,
+  replayFinished: "Replay finished",
+  replayOutOfSync:
+    "This replay was recorded with another version of the game, so it may have played out differently.",
+  replayInSync: "The match played out exactly as recorded.",
+  watchingReplay: "Watching a replay",
 
   // Settings
   audio: "Audio",

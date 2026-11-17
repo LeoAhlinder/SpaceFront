@@ -1,6 +1,14 @@
 import type { GameEvent } from "../world/diplomacy";
 import { refGrid, refTile } from "../world/tileRef";
-import type { CombatEffect, ShipKind, StructureKind, World } from "../world/world";
+import type {
+  CombatEffect,
+  Fallout,
+  Ship,
+  ShipKind,
+  Structure,
+  StructureKind,
+  World,
+} from "../world/world";
 import { coronaTiles, gridOf } from "../world/world";
 
 /**
@@ -90,6 +98,51 @@ export function diplomacySnapshot(world: World): DiplomacySnapshot {
   };
 }
 
+function structureView(s: Structure): StructureView {
+  return {
+    id: s.id,
+    kind: s.kind,
+    owner: s.owner,
+    grid: s.grid,
+    tile: s.tile,
+    buildTicksLeft: s.buildTicksLeft,
+    readyTick: s.readyTick,
+    destroyed: s.destroyed,
+  };
+}
+
+function shipView(s: Ship): ShipView {
+  return {
+    id: s.id,
+    kind: s.kind,
+    owner: s.owner,
+    troops: s.troops,
+    fromGrid: s.fromGrid,
+    fromTile: s.fromTile,
+    toGrid: s.toGrid,
+    toTile: s.toTile,
+    launchTick: s.launchTick,
+    arriveTick: s.arriveTick,
+    waypoints: s.waypoints.flatMap((p) => [p.x, p.y]),
+  };
+}
+
+/** Everything on the map right now, for a client joining a match in progress (a loaded save). */
+export interface WorldSnapshot {
+  readonly structures: readonly StructureView[];
+  readonly ships: readonly ShipView[];
+  readonly fallout: readonly Fallout[];
+}
+
+/** The structures standing, ships in flight and fallout of a world, as the client draws them. */
+export function snapshotViews(world: World): WorldSnapshot {
+  return {
+    structures: world.structures.filter((s) => !s.destroyed).map(structureView),
+    ships: world.ships.map(shipView),
+    fallout: world.fallout.map((f) => ({ ...f })),
+  };
+}
+
 /** Starts recording changes, so drainDelta can report them. */
 export function trackChanges(world: World): void {
   world.log ??= {
@@ -133,35 +186,11 @@ export function drainDelta(world: World): TickDelta {
     stats[o + 8] = f.traitorUntil;
   }
 
-  const structures = [...new Set(log?.structures ?? [])].map((id) => {
-    const s = world.structures[id]!;
-    return {
-      id: s.id,
-      kind: s.kind,
-      owner: s.owner,
-      grid: s.grid,
-      tile: s.tile,
-      buildTicksLeft: s.buildTicksLeft,
-      readyTick: s.readyTick,
-      destroyed: s.destroyed,
-    };
-  });
+  const structures = [...new Set(log?.structures ?? [])].map((id) =>
+    structureView(world.structures[id]!),
+  );
   const launched = new Set(log?.shipsLaunched ?? []);
-  const shipsLaunched = world.ships
-    .filter((s) => launched.has(s.id))
-    .map((s) => ({
-      id: s.id,
-      kind: s.kind,
-      owner: s.owner,
-      troops: s.troops,
-      fromGrid: s.fromGrid,
-      fromTile: s.fromTile,
-      toGrid: s.toGrid,
-      toTile: s.toTile,
-      launchTick: s.launchTick,
-      arriveTick: s.arriveTick,
-      waypoints: s.waypoints.flatMap((p) => [p.x, p.y]),
-    }));
+  const shipsLaunched = world.ships.filter((s) => launched.has(s.id)).map(shipView);
   const shipsLanded = [...(log?.shipsLanded ?? [])];
   const events = [...(log?.events ?? [])];
   const effects = [...(log?.effects ?? [])];

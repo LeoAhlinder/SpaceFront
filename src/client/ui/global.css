@@ -562,3 +562,54 @@ button.inline {
     display: none;
   }
 }
+
+/* Saves and replays (M5) */
+.entries {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-top: 1px solid var(--panel-border);
+}
+
+.entry-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.entry .hint {
+  margin: 0;
+}
+
+.entry button.primary {
+  margin: 0;
+  padding: 6px 14px;
+  font-size: 14px;
+}
+
+.error-text {
+  color: var(--danger);
+}
+
+.replay-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.replay-bar strong {
+  margin-right: 6px;
+}
+
+.bottom-bar.hidden {
+  display: none;
+}

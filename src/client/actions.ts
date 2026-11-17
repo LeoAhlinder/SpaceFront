@@ -1,6 +1,12 @@
 import { BALANCE } from "../data/balance";
 import type { Command, FactionId, GridId, SignalKind } from "../core";
+import type { MatchSummary, WorkerMessage } from "../shared/messages";
+import { log } from "../shared/log";
 import type { SimBridge } from "./bridge/simBridge";
+import type { Platform } from "./platform/platform";
+import type { SavedEntry } from "./saves";
+import { SaveLibrary } from "./saves";
+import { strings } from "./ui/strings";
 import type { TileHit } from "./render/renderer";
 import type { Mode } from "./store/clientStore";
 import { dismissAlert, isPortKind, ui, view } from "./store/clientStore";
@@ -19,6 +25,18 @@ export interface Actions {
   readonly togglePause: () => void;
   /** Opens or closes the in-game menu (which pauses the game while open). */
   readonly setGameMenu: (open: boolean) => void;
+  /** Saved games and replays on this platform. */
+  readonly library: SaveLibrary;
+  /** Saves the running match (a quick save replaces the previous quick save). */
+  readonly saveGame: (quick?: boolean) => Promise<void>;
+  /** Stores the running (or just finished) match's replay. */
+  readonly saveReplay: () => Promise<void>;
+  readonly loadGame: (entry: SavedEntry) => Promise<void>;
+  readonly watchReplay: (entry: SavedEntry) => Promise<void>;
+  /** Replay speed, times normal. */
+  readonly setReplaySpeed: (speed: number) => void;
+  /** Answers to the worker's save and replay requests; call for every worker message. */
+  readonly onWorkerMessage: (message: WorkerMessage) => void;
   readonly clickTile: (hit: TileHit) => void;
   readonly setTroopRatio: (pct: number) => void;
   readonly openSystem: () => void;
@@ -50,7 +68,38 @@ export interface Actions {
   readonly signal: (signal: SignalKind, to: number) => void;
 }
 
-export function createActions(bridge: SimBridge): Actions {
+/** How long a toast ("Game saved") stays up, in ms. */
+const TOAST_MS = 2500;
+
+export function createActions(bridge: SimBridge, platform: Platform): Actions {
+  const library = new SaveLibrary(platform);
+  /** Save and replay requests waiting for the worker's answer, by request id. */
+  const waiting = new Map<number, (data: Uint8Array, summary: MatchSummary) => void>();
+  let nextRequest = 1;
+  let toastTimer: ReturnType<typeof setTimeout> | undefined;
+  const toast = (text: string) => {
+    ui.toast.value = text;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => (ui.toast.value = null), TOAST_MS);
+  };
+  /** Asks the worker for save or replay data. */
+  const requestData = (type: "save" | "getReplay") =>
+    new Promise<{ data: Uint8Array; summary: MatchSummary }>((resolve) => {
+      const requestId = nextRequest++;
+      waiting.set(requestId, (data, summary) => resolve({ data, summary }));
+      bridge.send({ type, requestId });
+    });
+  const inMatch = () =>
+    (ui.phase.value === "playing" || ui.phase.value === "ended") &&
+    !view.replay &&
+    view.init !== null;
+  /** Starts a saved game or replay from its bytes. */
+  const begin = (message: { type: "load" | "watchReplay"; data: Uint8Array }) => {
+    ui.phase.value = "loading";
+    ui.error.value = null;
+    ui.tutorialStep.value = null;
+    bridge.send(message);
+  };
   const player = () => (view.init ? (view.init.playerId as FactionId) : null);
   const send = (command: Command) => bridge.send({ type: "command", command });
   let lastPlanet = 0;
@@ -125,6 +174,54 @@ export function createActions(bridge: SimBridge): Actions {
       ui.selected.value = null;
       ui.screen.value = "main";
       ui.phase.value = "menu";
+    },
+
+    library,
+
+    saveGame: async (quick = false) => {
+      if (!inMatch() || ui.phase.value !== "playing") return;
+      try {
+        const { data, summary } = await requestData("save");
+        await library.store("save", data, summary, quick);
+        toast(quick ? strings.quickSaved : strings.gameSaved);
+      } catch (error) {
+        log.error("Saving failed", error);
+        toast(strings.saveFailed);
+      }
+    },
+
+    saveReplay: async () => {
+      if (!inMatch()) return;
+      try {
+        const { data, summary } = await requestData("getReplay");
+        await library.store("replay", data, summary);
+        toast(strings.replaySaved);
+      } catch (error) {
+        log.error("Saving the replay failed", error);
+        toast(strings.saveFailed);
+      }
+    },
+
+    loadGame: async (entry) => {
+      begin({ type: "load", data: await library.read(entry) });
+    },
+
+    watchReplay: async (entry) => {
+      begin({ type: "watchReplay", data: await library.read(entry) });
+    },
+
+    setReplaySpeed: (speed) => {
+      if (!view.replay) return;
+      ui.replaySpeed.value = speed;
+      view.tickMs = 100 / speed;
+      bridge.send({ type: "setSpeed", speed });
+    },
+
+    onWorkerMessage: (message) => {
+      if (message.type !== "saveData" && message.type !== "replayData") return;
+      const done = waiting.get(message.requestId);
+      waiting.delete(message.requestId);
+      done?.(message.data, message.summary);
     },
 
     setPaused,

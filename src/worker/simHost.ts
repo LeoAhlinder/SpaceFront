@@ -1,23 +1,29 @@
-import { BALANCE } from "../data/balance";
-import { LANDABLE_BODIES } from "../data/bodies";
-import type { GridId, MatchConfig, TerrainMap, World } from "../core";
+import type { TerrainMap } from "../core";
 import {
-  addBot,
-  addFaction,
-  addNations,
-  createWorld,
-  diplomacySnapshot,
   drainDelta,
-  isOwnableTerrain,
+  hashWorld,
   loadTerrainMap,
+  loadWorld,
   queueCommand,
-  Rng,
   runTick,
+  saveWorld,
   TICK_MS,
   trackChanges,
 } from "../core";
-import type { ClientMessage, MatchInit, MatchSetup, WorkerMessage } from "../shared/messages";
+import type {
+  ClientMessage,
+  MatchSetup,
+  ReplayCommand,
+  ReplayLog,
+  WorkerMessage,
+} from "../shared/messages";
 import { log } from "../shared/log";
+import { gunzip, gzip } from "./compress";
+import type { Match } from "./match";
+import { buildMatch, MAP_IDS, matchInit, matchSummary } from "./match";
+import { decodeReplay, encodeReplay, queueReplayCommands, replayOf } from "./replay";
+
+export { botHomes } from "./match";
 
 /** What the host needs from its environment (the worker, or a test). */
 export interface HostEnv {
@@ -28,16 +34,33 @@ export interface HostEnv {
   clearInterval(handle: unknown): void;
 }
 
+/** The header the host stores in every save, next to the world. */
+interface SaveHeader {
+  readonly kind: "spacefront-save";
+  readonly playerId: number;
+  readonly setup: MatchSetup;
+  /** The player's commands so far, so the match's replay survives saving and loading. */
+  readonly commands: readonly ReplayCommand[];
+}
+
+/** Fastest replay speed (times normal). */
+const MAX_SPEED = 16;
+
 /**
- * Owns the World in single-player: builds the match (the player, the
- * difficulty's nations and colonies, then bots), runs ticks on a fixed
- * timer, applies the player's commands and posts a delta after every tick.
- * In multiplayer (M6) commands will come from the server instead.
+ * Owns the World in single-player: builds the match, runs ticks on a fixed
+ * timer, applies the player's commands (recording them for the replay) and
+ * posts a delta after every tick. Also saves, loads and plays replays. In
+ * multiplayer (M6) commands will come from the server instead.
  */
 export class SimHost {
-  private world: World | null = null;
-  private playerId = 0;
+  private match: Match | null = null;
+  /** Every command the player gave this match, with its tick: the replay log. */
+  private commands: ReplayCommand[] = [];
+  /** While watching a replay: the log and the next command to queue. */
+  private replay: { readonly log: ReplayLog; next: number } | null = null;
+  private maps: Map<string, TerrainMap> | null = null;
   private paused = false;
+  private speed = 1;
   private timer: unknown = null;
 
   constructor(private readonly env: HostEnv) {}
@@ -45,104 +68,139 @@ export class SimHost {
   handle(message: ClientMessage): void {
     switch (message.type) {
       case "start":
-        this.start(message.setup).catch((error: unknown) => {
-          log.error("Match failed to start", error);
-          this.env.post({ type: "error", message: String(error) });
-        });
+        this.run(() => this.start(message.setup), "Match failed to start");
+        break;
+      case "load":
+        this.run(() => this.load(message.data), "Save could not be loaded");
+        break;
+      case "watchReplay":
+        this.run(() => this.watch(message.data), "Replay could not be played");
+        break;
+      case "save":
+        this.run(() => this.save(message.requestId), "Game could not be saved");
+        break;
+      case "getReplay":
+        this.postReplay(message.requestId);
         break;
       case "pause":
         this.paused = message.paused;
         break;
-      case "command":
-        // In single-player the client may only command its own faction.
-        if (this.world && message.command.faction === this.playerId) {
-          queueCommand(this.world, message.command);
-        }
+      case "setSpeed":
+        this.speed = Math.max(1, Math.min(MAX_SPEED, Math.round(message.speed)));
+        if (this.timer !== null) this.startTimer();
         break;
+      case "command": {
+        // In single-player the client may only command its own faction, and not during replays.
+        const match = this.match;
+        if (!match || this.replay || message.command.faction !== match.playerId) break;
+        queueCommand(match.world, message.command);
+        this.commands.push({ tick: match.world.tick, command: message.command });
+        break;
+      }
     }
+  }
+
+  /** The running match's state hash (tests compare runs with it). */
+  hash(): number {
+    return this.match ? hashWorld(this.match.world) : 0;
   }
 
   /** Runs one tick and posts its delta. Public for tests. */
   step(): void {
-    const world = this.world;
-    if (!world || this.paused) return;
+    const match = this.match;
+    if (!match || this.paused) return;
+    const world = match.world;
+    if (this.replay)
+      this.replay.next = queueReplayCommands(match, this.replay.log, this.replay.next);
     const ctx = runTick(world);
     for (const r of ctx.rejected) {
-      if (r.command.faction === this.playerId) log.debug("Command rejected:", r.reason, r.command);
+      if (r.command.faction === match.playerId) log.debug("Command rejected:", r.reason, r.command);
     }
     const delta = drainDelta(world);
     this.env.post({ type: "tick", delta }, [delta.tiles.buffer, delta.stats.buffer]);
-    if (world.winner !== null) this.stop();
+    if (this.replay && world.tick >= this.replay.log.endTick) {
+      this.env.post({ type: "replayEnded", inSync: hashWorld(world) === this.replay.log.endHash });
+      this.stop();
+    } else if (world.winner !== null && !this.replay) {
+      this.stop();
+    }
+  }
+
+  /** Runs an async job; a failure becomes an error message for the client. */
+  private run(job: () => Promise<void>, what: string): void {
+    job().catch((error: unknown) => {
+      log.error(what, error);
+      this.env.post({ type: "error", message: `${what}: ${errorText(error)}` });
+    });
   }
 
   private async start(setup: MatchSetup): Promise<void> {
     this.stop();
-    // Every landable body of the solar system, grid i = LANDABLE_BODIES[i].
-    const maps = await Promise.all(LANDABLE_BODIES.map((b) => this.loadMap(b.map!.mapId)));
-    const config: MatchConfig = {
-      seed: setup.seed,
-      difficulty: setup.difficulty,
-      bodies: LANDABLE_BODIES.map((b) => ({
-        width: b.map!.width,
-        height: b.map!.height,
-        mapId: b.map!.mapId,
-        bodyId: b.id,
-      })),
-      corona: true,
-      // The tutorial lets the player read before spawning: no timed spawn phase.
-      spawnPhaseTicks: setup.tutorial ? 0 : BALANCE.match.spawnPhaseTicks,
-    };
-    const world = createWorld(config, new Map(maps.map((m) => [m.id, m])));
-    trackChanges(world);
-    const player = addFaction(world, setup.playerName, "player");
-    this.playerId = player.id;
-    // Dev builds only (?solars=N): a head start for play-testing late-game features.
-    if (setup.devStartSolars !== undefined) player.solars = setup.devStartSolars;
-    if (setup.tutorial) player.solars = BALANCE.tutorial.startSolars;
-    const earth = maps.find((m) => m.id === "earth");
-    if (earth && !setup.tutorial) addNations(world, setup.difficulty, earth.regions);
-    const botCount = setup.tutorial ? BALANCE.tutorial.botCount : setup.botCount;
-    const homes = botHomes(world, botCount, setup.seed);
-    homes.forEach((grid, i) => addBot(world, `Bot ${i + 1}`, grid));
-    this.world = world;
-    this.paused = false;
+    this.begin(buildMatch(setup, await this.loadMaps()), [], null);
+  }
 
-    const init: MatchInit = {
-      playerId: this.playerId,
-      spawnPhaseTicks: config.spawnPhaseTicks ?? 0,
-      ownableTiles: world.ownableTiles,
-      winLandPct: BALANCE.match.winLandPct,
-      grids: world.grids.map((g) => ({
-        id: g.id,
-        bodyId: world.gridBodies[g.id] ?? "",
-        width: g.width,
-        height: g.height,
-        terrain: g.terrain.slice(),
-        owner: g.owner.slice(),
-      })),
-      corona: world.corona && {
-        id: world.corona.id,
-        rings: world.corona.rings,
-        sectors: world.corona.sectors,
-        innerRings: world.corona.innerRings,
-        middleRings: world.corona.middleRings,
-        owner: world.corona.owner.slice(),
-      },
-      factions: world.factions.slice(1).map((f) => {
-        const nation = world.nations.find((n) => n.faction === f.id);
-        return {
-          id: f.id,
-          name: f.name,
-          kind: f.kind,
-          ...(nation && { nationId: nation.nationId }),
-          ...(nation && nation.home !== 0 && { homeId: nation.home }),
-        };
-      }),
-      diplomacy: diplomacySnapshot(world),
-      difficulty: setup.difficulty,
+  private async load(data: Uint8Array): Promise<void> {
+    this.stop();
+    const { world, header } = loadWorld<SaveHeader>(await gunzip(data));
+    if (header.kind !== "spacefront-save" || !world.factions[header.playerId]) {
+      throw new Error("Save is damaged");
+    }
+    this.begin(
+      { world, playerId: header.playerId, setup: header.setup },
+      [...header.commands],
+      null,
+    );
+  }
+
+  private async watch(data: Uint8Array): Promise<void> {
+    this.stop();
+    const replay = decodeReplay(data);
+    this.begin(buildMatch(replay.setup, await this.loadMaps()), [], replay);
+  }
+
+  /** Makes a match the running one, tells the client, and starts the clock. */
+  private begin(match: Match, commands: ReplayCommand[], replay: ReplayLog | null): void {
+    trackChanges(match.world);
+    this.match = match;
+    this.commands = commands;
+    this.replay = replay && { log: replay, next: 0 };
+    this.paused = false;
+    this.speed = 1;
+    this.env.post({ type: "init", init: matchInit(match, replay !== null) });
+    this.startTimer();
+  }
+
+  private async save(requestId: number): Promise<void> {
+    const match = this.match;
+    if (!match || this.replay) throw new Error("No match to save");
+    const header: SaveHeader = {
+      kind: "spacefront-save",
+      playerId: match.playerId,
+      setup: match.setup,
+      commands: this.commands,
     };
-    this.env.post({ type: "init", init });
-    this.timer = this.env.setInterval(() => this.step(), TICK_MS);
+    const summary = matchSummary(match);
+    // Taken synchronously, so it is one tick's state even while the clock runs.
+    const raw = saveWorld(match.world, header);
+    const data = await gzip(raw);
+    this.env.post({ type: "saveData", requestId, data, summary }, [data.buffer]);
+  }
+
+  private postReplay(requestId: number): void {
+    const match = this.match;
+    if (!match || this.replay) return;
+    const data = encodeReplay(replayOf(match, this.commands));
+    this.env.post({ type: "replayData", requestId, data, summary: matchSummary(match) }, [
+      data.buffer,
+    ]);
+  }
+
+  /** Every landable body's map, loaded once. */
+  private async loadMaps(): Promise<Map<string, TerrainMap>> {
+    if (this.maps) return this.maps;
+    const maps = await Promise.all(MAP_IDS.map((id) => this.loadMap(id)));
+    this.maps = new Map(maps.map((m) => [m.id, m]));
+    return this.maps;
   }
 
   private async loadMap(id: string): Promise<TerrainMap> {
@@ -153,34 +211,17 @@ export class SimHost {
     return loadTerrainMap(terrain, JSON.parse(new TextDecoder().decode(info)));
   }
 
+  private startTimer(): void {
+    if (this.timer !== null) this.env.clearInterval(this.timer);
+    this.timer = this.env.setInterval(() => this.step(), TICK_MS / this.speed);
+  }
+
   private stop(): void {
     if (this.timer !== null) this.env.clearInterval(this.timer);
     this.timer = null;
   }
 }
 
-/**
- * Home maps for `count` bots: one on every body first, so no world starts
- * empty, then the rest spread by how much land each body has.
- */
-export function botHomes(world: World, count: number, seed: number): GridId[] {
-  const rng = Rng.fromSeed(seed, 7);
-  const land = world.grids.map((g) => {
-    let n = 0;
-    for (let t = 0; t < g.size; t++) if (isOwnableTerrain(g.terrain[t]!)) n++;
-    return n;
-  });
-  const total = land.reduce((a, b) => a + b, 0);
-  const homes: GridId[] = [];
-  for (let i = 0; i < count; i++) {
-    if (i < world.grids.length) {
-      homes.push(world.grids[i]!.id);
-      continue;
-    }
-    let pick = rng.nextInt(total);
-    let g = 0;
-    while (pick >= land[g]!) pick -= land[g++]!;
-    homes.push(world.grids[g]!.id);
-  }
-  return homes;
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

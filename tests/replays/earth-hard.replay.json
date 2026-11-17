@@ -1,0 +1,264 @@
+{
+  "format": "spacefront-replay",
+  "version": 1,
+  "setup": {
+    "seed": 90210,
+    "mapId": "sol",
+    "botCount": 30,
+    "playerName": "Recorder",
+    "difficulty": "hard"
+  },
+  "commands": [
+    {
+      "tick": 5,
+      "command": {
+        "type": "spawn",
+        "faction": 1,
+        "grid": 2,
+        "tile": 120573
+      }
+    },
+    {
+      "tick": 120,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 123743,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 180,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 125355,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 240,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 126951,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 300,
+      "command": {
+        "type": "setRatio",
+        "faction": 1,
+        "troopRatioPct": 55
+      }
+    },
+    {
+      "tick": 360,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 130083,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 420,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 131630,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 480,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 133208,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 540,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 134808,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 600,
+      "command": {
+        "type": "build",
+        "faction": 1,
+        "kind": "spaceport",
+        "grid": 2,
+        "tile": 120573
+      }
+    },
+    {
+      "tick": 660,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 138025,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 720,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 139658,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 780,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 141310,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 840,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 143022,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 900,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 145170,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 960,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 146846,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 1020,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 148573,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 1080,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 150818,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 1100,
+      "command": {
+        "type": "launch",
+        "faction": 1,
+        "kind": "troopLander",
+        "from": 107,
+        "toGrid": 3,
+        "toTile": 500,
+        "ratioPct": 30
+      }
+    },
+    {
+      "tick": 1140,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 152643,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 1200,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 154884,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 1260,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 157254,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 1320,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 159672,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 1380,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 162226,
+        "ratioPct": 35
+      }
+    },
+    {
+      "tick": 1440,
+      "command": {
+        "type": "attack",
+        "faction": 1,
+        "grid": 2,
+        "tile": 165246,
+        "ratioPct": 35
+      }
+    }
+  ],
+  "endTick": 1500,
+  "endHash": 2555248919
+}

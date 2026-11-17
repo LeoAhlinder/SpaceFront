@@ -20,7 +20,8 @@
     "gen:trig": "tsx tools/gen-trig.ts && prettier --write src/core/math/trigTable.ts",
     "mapgen": "tsx tools/mapgen/earth.ts && tsx tools/mapgen/bodies.ts && prettier --write public/maps",
     "e2e": "playwright test",
-    "atlas": "tsx tools/atlas/pack.ts && prettier --write src/client/render/atlasFrames.ts tools/atlas"
+    "atlas": "tsx tools/atlas/pack.ts && prettier --write src/client/render/atlasFrames.ts tools/atlas",
+    "replays:record": "tsx tools/replays/record.ts && prettier --write tests/replays"
   },
   "dependencies": {
     "@preact/signals": "2.11.4",

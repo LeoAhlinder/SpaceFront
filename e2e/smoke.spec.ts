@@ -85,3 +85,48 @@ test("settings, tutorial and the in-game menu", async ({ page }) => {
 
   expect(errors).toEqual([]);
 });
+
+/**
+ * Save and load: save a running match from the in-game menu, quit, load it
+ * from the main menu; then save its replay and watch it.
+ */
+test("save, load and watch a replay", async ({ page }) => {
+  const errors = watchErrors(page);
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "Play", exact: true }).click();
+  await page.getByRole("radio", { name: "Easy" }).click();
+  await page.getByRole("button", { name: "Start" }).click();
+  await expect(page.locator(".view-bar")).toContainText("Earth");
+  const canvas = page.locator("#game canvas");
+  const box = (await canvas.boundingBox())!;
+  await canvas.click({ position: { x: box.width / 2, y: box.height / 2 } });
+  await expect(page.locator(".stats")).not.toContainText("0 · 0.0%", { timeout: 5_000 });
+
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Save game" }).click();
+  await expect(page.locator(".toast")).toHaveText("Game saved");
+  await page.getByRole("button", { name: "Save replay" }).click();
+  await expect(page.locator(".toast")).toHaveText("Replay saved");
+  await page.getByRole("button", { name: "Quit to menu" }).click();
+
+  await page.getByRole("button", { name: "Load game" }).click();
+  await expect(page.locator(".entry")).toHaveCount(1);
+  await page.getByRole("button", { name: "Load", exact: true }).click();
+  await expect(page.locator(".view-bar")).toContainText("Earth");
+  // The loaded match has the player's land.
+  await expect(page.locator(".stats")).not.toContainText("0 · 0.0%");
+
+  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Quit to menu" }).click();
+  await page.getByRole("button", { name: "Replays" }).click();
+  await page.getByRole("button", { name: "Watch" }).click();
+  await expect(page.locator(".replay-bar")).toContainText("Watching a replay");
+  await page.getByRole("button", { name: "16×" }).click();
+  await expect(page.getByRole("heading", { name: "Replay finished" })).toBeVisible({
+    timeout: 20_000,
+  });
+  await expect(page.locator(".menu")).toContainText("exactly as recorded");
+
+  expect(errors).toEqual([]);
+});

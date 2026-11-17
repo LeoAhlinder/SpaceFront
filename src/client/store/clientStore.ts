@@ -144,6 +144,10 @@ export const ui = {
   capturingKey: signal(false),
   /** The tutorial's current step, or null outside the tutorial. */
   tutorialStep: signal<number | null>(null),
+  /** Replay speed (times normal). */
+  replaySpeed: signal(1),
+  /** When a replay has ended: whether it stayed in sync (null while it plays). */
+  replayInSync: signal<boolean | null>(null),
   /** A short message at the top of the screen (e.g. "Game saved"), or null. */
   toast: signal<string | null>(null),
   tick: signal(0),
@@ -235,6 +239,13 @@ export function applyWorkerMessage(message: WorkerMessage): void {
       break;
     case "error":
       ui.error.value = message.message;
+      if (ui.phase.value === "loading") ui.phase.value = "menu";
+      break;
+    case "replayEnded":
+      ui.replayInSync.value = message.inSync;
+      ui.phase.value = "ended";
+      break;
+    default:
       break;
   }
 }
@@ -249,12 +260,22 @@ function applyInit(init: MatchInit): void {
     view.ownable[init.corona.id] = init.corona.owner.length;
   }
   view.dirty = view.owners.map(() => []);
-  view.ownerCounts = view.owners.map(() => new Map<number, number>());
-  view.structures = new Map();
-  view.ships = new Map();
+  // A loaded save starts with owned land: count it once.
+  view.ownerCounts = view.owners.map((owners) => {
+    const counts = new Map<number, number>();
+    for (let t = 0; t < owners.length; t++) {
+      const o = owners[t]!;
+      if (o !== 0) counts.set(o, (counts.get(o) ?? 0) + 1);
+    }
+    return counts;
+  });
+  view.structures = new Map(init.snapshot.structures.map((s) => [s.id, s]));
+  view.ships = new Map(init.snapshot.ships.map((s) => [s.id, s]));
   view.warships = new Map();
   view.effects = [];
-  view.fallout = [];
+  view.fallout = init.snapshot.fallout.map((f) => ({ ...f }));
+  view.replay = init.replay;
+  view.tickMs = 100;
   view.factions = new Map(
     init.factions.map((f) => [
       f.id,
@@ -278,7 +299,10 @@ function applyInit(init: MatchInit): void {
   ui.selected.value = null;
   publishRelations(0);
   ui.spawnPhaseTicks.value = init.spawnPhaseTicks;
-  ui.tick.value = 0;
+  ui.tick.value = init.tick;
+  ui.troopRatioPct.value = init.troopRatioPct;
+  ui.replaySpeed.value = 1;
+  ui.replayInSync.value = null;
   ui.winner.value = null;
   ui.alerts.value = [];
   ui.mode.value = "none";
@@ -294,6 +318,7 @@ function applyInit(init: MatchInit): void {
   ui.gameSettings.value = false;
   ui.paused.value = false;
   view.lastTickAt = performance.now();
+  countStructures(init.tick);
   publishFactions();
 }
 

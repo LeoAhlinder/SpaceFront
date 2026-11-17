@@ -7,6 +7,7 @@ import { attachClickSounds, createGameSounds } from "./audio/gameSounds";
 import { SimBridge } from "./bridge/simBridge";
 import { attachKeys } from "./input/keymap";
 import { attachPointer } from "./input/pointer";
+import { createPlatform } from "./platform/platform";
 import { GameRenderer } from "./render/renderer";
 import { settings } from "./settings";
 import { applyWorkerMessage, ui, view } from "./store/clientStore";
@@ -21,13 +22,15 @@ function element(id: string): HTMLElement {
 async function main(): Promise<void> {
   const renderer = await GameRenderer.create(element("game"), settings.value.quality);
   const bridge = new SimBridge();
-  const actions = createActions(bridge);
+  const platform = createPlatform();
+  const actions = createActions(bridge, platform);
   const sounds = createGameSounds();
 
   bridge.onMessage((message) => {
     applyWorkerMessage(message);
     if (message.type === "init") renderer.setMatch(message.init);
     sounds(message);
+    actions.onWorkerMessage(message);
   });
 
   // Browsers start audio only after a user gesture.
@@ -108,7 +111,7 @@ async function main(): Promise<void> {
       fireKinetic: () => actions.toggleMode("kineticStrike"),
       fireAntimatter: () => actions.toggleMode("antimatterWarhead"),
       pause: actions.togglePause,
-      quickSave: () => undefined,
+      quickSave: () => void actions.saveGame(true),
     },
     () => ui.capturingKey.value,
   );

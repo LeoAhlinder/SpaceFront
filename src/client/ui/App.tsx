@@ -16,7 +16,7 @@ import {
 } from "../store/clientStore";
 import { keyLabel } from "../input/keymap";
 import { formatCount } from "./format";
-import { GameMenu, MainMenu, PauseBanner } from "./Menus";
+import { GameMenu, MainMenu, PauseBanner, ReplayBar } from "./Menus";
 import { TutorialPanel } from "./Tutorial";
 import { strings } from "./strings";
 
@@ -30,7 +30,9 @@ export function App({ actions }: { actions: Actions }) {
       {phase === "menu" && <MainMenu actions={actions} />}
       {phase === "loading" && <div class="center-note">{strings.loading}</div>}
       {(phase === "playing" || phase === "ended") && <Hud actions={actions} />}
-      {(phase === "ended" || lost) && !ui.gameMenu.value && <EndOverlay actions={actions} />}
+      {(phase === "ended" || (lost && !view.replay)) && !ui.gameMenu.value && (
+        <EndOverlay actions={actions} />
+      )}
       <GameMenu actions={actions} />
       {ui.toast.value && <div class="toast">{ui.toast.value}</div>}
       {ui.error.value && <div class="error">{strings.error(ui.error.value)}</div>}
@@ -44,6 +46,7 @@ function Hud({ actions }: { actions: Actions }) {
     <>
       <div class="top-center">
         <ViewBar actions={actions} />
+        <ReplayBar actions={actions} />
         <PauseBanner />
         <SpawnBanner />
         <ModeBanner />
@@ -60,7 +63,7 @@ function Hud({ actions }: { actions: Actions }) {
         <AlliesPanel actions={actions} />
         <TutorialPanel />
       </div>
-      <div class="bottom-bar panel">
+      <div class={`bottom-bar panel ${view.replay ? "hidden" : ""}`}>
         <Actions actions={actions} />
         <Slider
           label={strings.attackRatio}
@@ -494,6 +497,20 @@ function EndOverlay({ actions }: { actions: Actions }) {
   const won = winner?.kind === "player";
   // Allies share a win (GAMEPLAY_PLAN.md §9).
   const shared = !won && !!winner && !!ui.player.value?.alive && isAlly(me, winner.id);
+  const inSync = ui.replayInSync.value;
+  if (view.replay && inSync !== null) {
+    return (
+      <div class="menu panel">
+        <h1>{strings.replayFinished}</h1>
+        <p>{inSync ? strings.replayInSync : strings.replayOutOfSync}</p>
+        <div class="menu-row">
+          <button class="primary" onClick={actions.quitToMenu}>
+            {strings.quitToMenu}
+          </button>
+        </div>
+      </div>
+    );
+  }
   return (
     <div class="menu panel">
       <h1>{won ? strings.victory : shared ? strings.sharedVictory : strings.defeat}</h1>
@@ -508,6 +525,9 @@ function EndOverlay({ actions }: { actions: Actions }) {
       </p>
       <div class="menu-row">
         <button onClick={actions.quitToMenu}>{strings.quitToMenu}</button>
+        {!view.replay && (
+          <button onClick={() => void actions.saveReplay()}>{strings.saveReplay}</button>
+        )}
         {!view.replay && (
           <button class="primary" onClick={() => actions.startMatch()}>
             {strings.playAgain}
