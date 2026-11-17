@@ -17,7 +17,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
-    "gen:trig": "node tools/gen-trig.ts && prettier --write src/core/math/trigTable.ts"
+    "gen:trig": "tsx tools/gen-trig.ts && prettier --write src/core/math/trigTable.ts",
+    "mapgen": "tsx tools/mapgen/earth.ts && prettier --write public/maps"
   },
   "dependencies": {
     "@preact/signals": "2.11.4",
@@ -27,14 +28,20 @@
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@preact/preset-vite": "2.10.6",
+    "@types/geojson": "7946.0.16",
     "@types/node": "22.20.5",
+    "@types/topojson-client": "3.1.5",
+    "@types/topojson-specification": "1.0.5",
     "eslint": "10.15.0",
     "eslint-config-prettier": "10.1.8",
     "globals": "17.14.0",
     "prettier": "3.10.1",
+    "topojson-client": "3.1.0",
+    "tsx": "4.23.15",
     "typescript": "6.0.3",
     "typescript-eslint": "8.73.0",
     "vite": "8.3.8",
-    "vitest": "5.1.0"
+    "vitest": "5.1.0",
+    "world-atlas": "2.0.2"
   }
 }

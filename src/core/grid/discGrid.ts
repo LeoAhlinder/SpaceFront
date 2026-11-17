@@ -47,6 +47,22 @@ export class DiscGrid implements TileGrid {
     this.usableCount = usable;
   }
 
+  /**
+   * Replaces the terrain with map data. The map's Space tiles must match this
+   * disc's outline exactly; anything else means the map was made for another shape.
+   */
+  applyTerrain(terrain: Uint8Array): void {
+    if (terrain.length !== this.size) throw new RangeError("terrain size doesn't match grid");
+    for (let i = 0; i < this.size; i++) {
+      const mapIsSpace = terrain[i] === Terrain.Space;
+      const gridIsSpace = this.terrain[i] === Terrain.Space;
+      if (mapIsSpace !== gridIsSpace) {
+        throw new Error(`terrain outline doesn't match the disc at tile ${i}`);
+      }
+    }
+    this.terrain.set(terrain);
+  }
+
   x(tile: number): number {
     return tile % this.side;
   }

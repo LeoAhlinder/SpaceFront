@@ -118,15 +118,16 @@ Tests live next to the code as `*.test.ts`, except cross-module tests in `tests/
 
 ## 10. Scripts (target)
 
-| Script           | Does                                                    |
-| ---------------- | ------------------------------------------------------- |
-| `npm run dev`    | Vite dev server                                         |
-| `npm run build`  | Production build into `dist/`                           |
-| `npm run check`  | `typecheck` + `lint` + `test`. Run before every commit. |
-| `npm run test`   | Vitest                                                  |
-| `npm run bench`  | Benchmarks                                              |
-| `npm run e2e`    | Playwright smoke tests                                  |
-| `npm run mapgen` | Regenerate map assets                                   |
+| Script             | Does                                                        |
+| ------------------ | ----------------------------------------------------------- |
+| `npm run dev`      | Vite dev server                                             |
+| `npm run build`    | Production build into `dist/`                               |
+| `npm run check`    | `typecheck` + `lint` + `test`. Run before every commit.     |
+| `npm run test`     | Vitest                                                      |
+| `npm run bench`    | Benchmarks                                                  |
+| `npm run e2e`      | Playwright smoke tests                                      |
+| `npm run mapgen`   | Regenerate the Earth map (`public/maps/earth`, `docs/maps`) |
+| `npm run gen:trig` | Regenerate the sine lookup table                            |
 
 ## 11. Documentation
 

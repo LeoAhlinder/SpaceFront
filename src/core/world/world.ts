@@ -3,6 +3,7 @@ import { CommandQueue } from "../commands/commandQueue";
 import { DiscGrid } from "../grid/discGrid";
 import type { FactionId, GridId } from "../ids";
 import { factionId, gridId, MAX_FACTION_ID, NEUTRAL } from "../ids";
+import type { TerrainMap } from "../map/terrainMap";
 import { Rng } from "../math/rng";
 import type { FrontierHeap } from "./frontierHeap";
 
@@ -10,9 +11,11 @@ export type Difficulty = "easy" | "normal" | "hard" | "impossible";
 
 export type FactionKind = "neutral" | "player" | "bot" | "nation";
 
-/** One body in the match. Replaced by real map data in M0.4. */
+/** One body in the match. */
 export interface BodyConfig {
   readonly radius: number;
+  /** Map to load terrain from (e.g. "earth"). Without one, the body is all plains. */
+  readonly mapId?: string;
 }
 
 /** Everything needed to start a match. Plain JSON, so it can be saved and sent. */
@@ -74,12 +77,19 @@ export interface World {
   readonly pending: CommandQueue;
 }
 
-export function createWorld(config: MatchConfig): World {
+/**
+ * Builds the starting world. `maps` holds the decoded map data for every
+ * `mapId` the config mentions (loading files is the host's job, not core's).
+ */
+export function createWorld(
+  config: MatchConfig,
+  maps: ReadonlyMap<string, TerrainMap> = new Map(),
+): World {
   const world: World = {
     tick: 0,
     config,
     rng: Rng.fromSeed(config.seed),
-    grids: config.bodies.map((body, i) => new DiscGrid(gridId(i), body.radius)),
+    grids: config.bodies.map((body, i) => createGrid(i, body, maps)),
     factions: [],
     attacks: [],
     nextAttackId: 1,
@@ -87,6 +97,19 @@ export function createWorld(config: MatchConfig): World {
   };
   addFaction(world, "Neutral", "neutral");
   return world;
+}
+
+function createGrid(index: number, body: BodyConfig, maps: ReadonlyMap<string, TerrainMap>) {
+  const grid = new DiscGrid(gridId(index), body.radius);
+  if (body.mapId !== undefined) {
+    const map = maps.get(body.mapId);
+    if (!map) throw new Error(`Map "${body.mapId}" was not provided`);
+    if (map.radius !== body.radius) {
+      throw new Error(`Map "${body.mapId}" has radius ${map.radius}, body has ${body.radius}`);
+    }
+    grid.applyTerrain(map.terrain);
+  }
+  return grid;
 }
 
 /** Adds a faction with the next free id and returns it. */

@@ -12,6 +12,8 @@ export { isOwnableTerrain, Terrain, TERRAIN_COST_PCT } from "./grid/terrain";
 export type { TileGrid } from "./grid/tileGrid";
 export { factionId, gridId, MAX_FACTION_ID, NEUTRAL } from "./ids";
 export type { FactionId, GridId } from "./ids";
+export { decodeTerrain, encodeTerrain, loadTerrainMap } from "./map/terrainMap";
+export type { MapRegion, TerrainMap } from "./map/terrainMap";
 export * from "./math/fixed";
 export { Rng } from "./math/rng";
 export { ANGLE_FULL, ANGLE_HALF, ANGLE_QUARTER, fxCos, fxSin } from "./math/trig";

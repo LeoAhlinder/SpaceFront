@@ -36,9 +36,9 @@ How to read the tasks: each one is roughly one PR. `☐` = not started.
 
 ### M0.4 Earth map
 
-- ☐ `tools/mapgen`: public-domain world data → disc projection → terrain PNG + spawn regions JSON
-- ☐ Map loader in core, from the generated data into `DiscGrid`
-- ☐ `assets/CREDITS.md` with the map data source and its license
+- ☑ `tools/mapgen`: public-domain world data → equal-area disc projection → run-length-encoded terrain + spawn regions JSON (+ preview PNG)
+- ☑ Map loader in core, from the generated data into `DiscGrid`
+- ☑ `assets/CREDITS.md` with the map data source and its license
 
 ### M0.5 Bots
 
@@ -140,6 +140,7 @@ How to read the tasks: each one is roughly one PR. `☐` = not started.
 ## M5 — Polish and desktop build
 
 - ☐ Final sprites and atlas, sound effects, music
+- ☐ Real relief for Earth from public-domain elevation data, replacing the noise-based highlands and mountains
 - ☐ Main menu, settings (keys, volume, graphics), tutorial match
 - ☐ Save/load + replays (`Platform` with IndexedDB)
 - ☐ Performance pass on low-end laptops
@@ -161,11 +162,11 @@ How to read the tasks: each one is roughly one PR. `☐` = not started.
 
 **Order inside a milestone:** core + tests first → worker/delta → render → UI. Core features are always playable through the debug UI before they get polished.
 
-| Risk                                           | Mitigation                                                                     |
-| ---------------------------------------------- | ------------------------------------------------------------------------------ |
-| Desyncs appear later when multiplayer is added | Determinism tests and replay hashes from M0, banned APIs enforced by lint      |
-| Performance with many tiles, ships and AI      | Typed arrays, incremental frontiers, benchmarks from M0, staggered AI          |
-| Planet orbits make routes confusing            | Show arrival time and predicted target position when choosing a destination    |
-| A disc projection of Earth looks odd           | Test the mapgen early (M0.4). Tweak the projection before building more on it. |
-| Nation AI takes longer than expected           | Bots ship first; nations reuse the bot code and only add scoring               |
-| Steam needs an Electron-specific setup         | `Platform` interface from M0, so only one module changes                       |
+| Risk                                           | Mitigation                                                                                                                                               |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Desyncs appear later when multiplayer is added | Determinism tests and replay hashes from M0, banned APIs enforced by lint                                                                                |
+| Performance with many tiles, ships and AI      | Typed arrays, incremental frontiers, benchmarks from M0, staggered AI                                                                                    |
+| Planet orbits make routes confusing            | Show arrival time and predicted target position when choosing a destination                                                                              |
+| A disc projection of Earth looks odd           | Done in M0.4: an oblique equal-area projection centered near Africa keeps the rim mostly ocean. East Asia and Australia are still stretched at the edge. |
+| Nation AI takes longer than expected           | Bots ship first; nations reuse the bot code and only add scoring                                                                                         |
+| Steam needs an Electron-specific setup         | `Platform` interface from M0, so only one module changes                                                                                                 |

@@ -300,9 +300,12 @@ Deltas are the only thing that leaves the worker each tick.
 - **Bodies** (`data/bodies.ts`): radius, orbit, terrain profile, modifiers.
 - **Nations** (`data/nations.ts`): name, flag, tier, colors, Earth spawn region, which colonies they may have.
 - **Difficulty** (`data/difficulty.ts`): which tiers appear, how many colonies, which AI profiles.
-- **Maps:**
-  - **Earth:** built from public-domain data (e.g. Natural Earth) projected onto a disc by `tools/mapgen`. The output is a terrain PNG plus a JSON of nation spawn regions.
-  - **Other bodies:** generated procedurally from a seed with noise. The output is the same PNG format.
+- **Maps** live in `public/maps/<id>/` as two committed files:
+  - `terrain.bin`: terrain per tile, run-length encoded (format in `core/map/terrainMap.ts`). A binary file instead of a PNG because browsers may color-correct images, which would change terrain values.
+  - `regions.json`: map id, radius, and named regions (countries) with a spawn tile each.
+  - `loadTerrainMap` in core validates both files. `createWorld(config, maps)` copies the terrain into the body's `DiscGrid`. Loading the files from disk or network is the host's job (worker or tests), not core's.
+  - **Earth** (`npm run mapgen`, `tools/mapgen/earth.ts`): Natural Earth countries, rasterized and projected onto the disc with an **oblique Lambert azimuthal equal-area** projection centered on 10°E 15°N. Every tile covers the same real area, Africa sits in the middle, and the mid-Pacific is stretched around the rim. Highlands and mountains come from seeded noise, not real elevation. A preview image goes to `docs/maps/earth-preview.png`.
+  - **Other bodies** (M1): generated procedurally from a seed with noise, in the same file format.
 - Sprites are packed into an atlas by `tools/atlas`.
 
 ---
