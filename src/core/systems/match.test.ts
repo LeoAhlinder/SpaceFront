@@ -63,7 +63,7 @@ describe("deltas", () => {
   it("record nothing until tracking starts", () => {
     const world = testWorld(10, 1);
     runWith(world, spawn(world, 1, 10, 10));
-    expect(world.changes).toBeNull();
+    expect(world.log).toBeNull();
     expect(drainDelta(world).tiles.length).toBe(0);
   });
 

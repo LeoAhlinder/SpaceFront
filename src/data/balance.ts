@@ -82,6 +82,26 @@ export const BALANCE = {
     attackRatioMaxPct: 50,
   },
 
+  structures: {
+    /** Ticks to finish building a Spaceport (no Solar cost until M2). */
+    spaceportBuildTicks: 50,
+    /** No two structures closer than this many steps (Manhattan) on a map. */
+    minSpacing: 6,
+  },
+
+  ships: {
+    /** Troop Lander speed in space units per tick (Earth→Mars ≈ 10–70 s). */
+    landerSpeed: 8,
+    /** Same-planet hops (e.g. across an ocean) cover this many tiles per tick. */
+    landerTilesPerTick: 3,
+    /** No flight is shorter than this. */
+    minFlightTicks: 10,
+    /** Detours pass obstacles at this percent of their avoid radius. */
+    avoidMarginPct: 115,
+    /** Troops it costs to secure the landing tile. */
+    landingCost: 10,
+  },
+
   /** Expansion cost multiplier per terrain, in percent. 0 = can't be owned. */
   terrainCostPct: {
     space: 0,

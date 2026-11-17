@@ -1,0 +1,7 @@
+{
+  "id": "enceladus",
+  "width": 80,
+  "height": 40,
+  "source": "generated (tools/mapgen/bodies.ts)",
+  "regions": []
+}

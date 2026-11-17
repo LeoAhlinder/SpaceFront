@@ -1,0 +1,7 @@
+{
+  "id": "callisto",
+  "width": 180,
+  "height": 90,
+  "source": "generated (tools/mapgen/bodies.ts)",
+  "regions": []
+}

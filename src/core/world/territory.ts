@@ -12,7 +12,13 @@ export function setOwner(world: World, grid: TileGrid, tile: number, newOwner: F
   const oldOwner = grid.owner[tile]!;
   if (oldOwner === newOwner) return;
   grid.owner[tile] = newOwner;
-  world.changes?.push(tileRef(grid.id, tile));
+  world.log?.tiles.push(tileRef(grid.id, tile));
+  // Structures change hands with their tile.
+  const structure = world.structureAt[grid.id]![tile]!;
+  if (structure >= 0) {
+    world.structures[structure]!.owner = newOwner;
+    world.log?.structures.push(structure);
+  }
   const slots = world.tileSlots[grid.id]!;
   if (oldOwner !== NEUTRAL) {
     // Swap-remove the tile from the loser's list.

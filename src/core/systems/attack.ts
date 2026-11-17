@@ -29,21 +29,38 @@ export function startAttack(
   ratioPct: number,
 ): string | null {
   const attacker = world.factions[attackerId]!;
-  const grid = world.grids[gridId]!;
-  const target = grid.owner[focusTile]! as FactionId;
+  const target = world.grids[gridId]!.owner[focusTile]! as FactionId;
   const troops = Math.floor((attacker.troops * ratioPct) / 100);
   if (troops < 1) return "no troops";
+  const reason = beginAttack(world, attackerId, gridId, focusTile, target, troops);
+  if (reason === null) attacker.troops -= troops;
+  return reason;
+}
 
+/**
+ * Commits `troops` (already taken from wherever they came from) to an attack
+ * on `target`'s land on this grid: merged into a running attack on the same
+ * target, or a new one seeded from the attacker's border. Returns null on
+ * success; on failure the caller still holds the troops.
+ */
+export function beginAttack(
+  world: World,
+  attackerId: FactionId,
+  gridId: GridId,
+  focusTile: number,
+  target: FactionId,
+  troops: number,
+): string | null {
   const existing = world.attacks.find(
     (a) => a.attacker === attackerId && a.target === target && a.grid === gridId,
   );
   if (existing) {
-    attacker.troops -= troops;
     existing.troops += troops;
     existing.focusTile = focusTile;
     return null;
   }
 
+  const grid = world.grids[gridId]!;
   const attack: Attack = {
     id: world.nextAttackId,
     attacker: attackerId,
@@ -57,7 +74,7 @@ export function startAttack(
   // afterwards it is updated incrementally as tiles change hands. A target tile
   // next to several attacker tiles is pushed more than once; the extra entries
   // are skipped as stale when popped.
-  for (const ref of attacker.tiles) {
+  for (const ref of world.factions[attackerId]!.tiles) {
     if (refGrid(ref) !== gridId) continue;
     const n = grid.neighbors(refTile(ref), scratch);
     for (let i = 0; i < n; i++) {
@@ -70,7 +87,6 @@ export function startAttack(
   if (attack.frontier.size === 0) return "no shared border";
 
   world.nextAttackId += 1;
-  attacker.troops -= troops;
   world.attacks.push(attack);
   return null;
 }
@@ -141,7 +157,12 @@ function tileCost(world: World, grid: TileGrid, attack: Attack, tile: number): n
  * Adds them to the frontier of each of `owner`'s attacks on this grid whose
  * target owns them.
  */
-function extendFrontiers(world: World, grid: TileGrid, tile: number, owner: FactionId): void {
+export function extendFrontiers(
+  world: World,
+  grid: TileGrid,
+  tile: number,
+  owner: FactionId,
+): void {
   const n = grid.neighbors(tile, scratch);
   for (const attack of world.attacks) {
     if (attack.attacker !== owner || attack.grid !== grid.id) continue;

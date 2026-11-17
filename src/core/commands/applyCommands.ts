@@ -1,5 +1,7 @@
 import { startAttack } from "../systems/attack";
+import { applyLaunch } from "../systems/ships";
 import { applySpawn } from "../systems/spawn";
+import { applyBuild } from "../systems/structures";
 import type { System } from "../tick";
 import type { World } from "../world/world";
 import type { Command } from "./commands";
@@ -35,5 +37,10 @@ function applyCommand(world: World, command: Command): string | null {
     case "setRatio":
       world.factions[command.faction]!.troopRatioPct = command.troopRatioPct;
       return null;
+    case "build":
+      applyBuild(world, command);
+      return null;
+    case "launch":
+      return applyLaunch(world, command);
   }
 }

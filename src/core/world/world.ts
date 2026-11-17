@@ -6,6 +6,7 @@ import type { FactionId, GridId } from "../ids";
 import { factionId, gridId, MAX_FACTION_ID, NEUTRAL } from "../ids";
 import type { TerrainMap } from "../map/terrainMap";
 import { Rng } from "../math/rng";
+import type { Point } from "../space/space";
 import type { FrontierHeap } from "./frontierHeap";
 import type { TileRef } from "./tileRef";
 
@@ -20,6 +21,11 @@ export interface BodyConfig {
   readonly height: number;
   /** Map to load terrain from (e.g. "earth"). Without one, the body is all plains. */
   readonly mapId?: string;
+  /**
+   * The solar-system body (data/bodies.ts) this map belongs to. Needed for
+   * flights between bodies; maps without one can only be reached from themselves.
+   */
+  readonly bodyId?: string;
 }
 
 /** Everything needed to start a match. Plain JSON, so it can be saved and sent. */
@@ -59,6 +65,8 @@ export interface Faction {
 /** AI state for one bot faction. */
 export interface BotState {
   readonly faction: FactionId;
+  /** The map the bot spawns on, or null for a random one. */
+  readonly homeGrid: GridId | null;
   /** The bot's own random stream, so bots never shift each other's numbers. */
   readonly rng: Rng;
   /** Next tick on which this bot decides. Spread out so bots don't all think at once. */
@@ -78,6 +86,49 @@ export interface Attack {
   focusTile: number;
   /** Target tiles bordering the attacker, cheapest first. */
   readonly frontier: FrontierHeap;
+}
+
+export type StructureKind = "spaceport";
+
+/** A building on a map. Captured along with its tile. */
+export interface Structure {
+  readonly id: number;
+  readonly kind: StructureKind;
+  owner: FactionId;
+  readonly grid: GridId;
+  readonly tile: number;
+  /** Ticks until it works; 0 = finished. */
+  buildTicksLeft: number;
+}
+
+export type ShipKind = "troopLander";
+
+/** A spacecraft in flight. Its whole route is planned at launch. */
+export interface Ship {
+  readonly id: number;
+  readonly kind: ShipKind;
+  readonly owner: FactionId;
+  readonly troops: number;
+  readonly fromGrid: GridId;
+  readonly fromTile: number;
+  readonly toGrid: GridId;
+  readonly toTile: number;
+  readonly launchTick: number;
+  readonly arriveTick: number;
+  /** Route through space (empty for a hop within one map). */
+  readonly waypoints: readonly Point[];
+}
+
+/**
+ * What changed since the host last drained it (see core/delta). Null on the
+ * world means nobody is listening, so nothing is recorded. Not game state:
+ * never hashed or saved.
+ */
+export interface ChangeLog {
+  readonly tiles: TileRef[];
+  readonly structures: number[];
+  readonly shipsLaunched: number[];
+  readonly shipsLanded: number[];
 }
 
 /**
@@ -101,18 +152,23 @@ export interface World {
   /** Running attacks, in creation order. */
   attacks: Attack[];
   nextAttackId: number;
+  /** Body id per grid (null for maps outside the solar system, e.g. in tests). */
+  readonly gridBodies: readonly (string | null)[];
+  /** All structures; a structure's id is its index. */
+  readonly structures: Structure[];
+  /** Per grid, per tile: id of the structure there, or -1. */
+  readonly structureAt: Int32Array[];
+  /** Ships in flight, in launch order. */
+  ships: Ship[];
+  nextShipId: number;
   /** Commands waiting for their tick. */
   readonly pending: CommandQueue;
   /** Ownable land tiles across all grids, for the win condition. Fixed at creation. */
   readonly ownableTiles: number;
   /** The faction that won, or null while the match is running. */
   winner: FactionId | null;
-  /**
-   * Tiles whose owner changed since the host last drained them (see
-   * core/delta). Null means nobody is listening, so nothing is recorded.
-   * Not game state: it is never hashed or saved.
-   */
-  changes: TileRef[] | null;
+  /** Change log for the host (see ChangeLog); null when nobody listens. */
+  log: ChangeLog | null;
 }
 
 /**
@@ -134,10 +190,15 @@ export function createWorld(
     bots: [],
     attacks: [],
     nextAttackId: 1,
+    gridBodies: config.bodies.map((b) => b.bodyId ?? null),
+    structures: [],
+    structureAt: grids.map((g) => new Int32Array(g.size).fill(-1)),
+    ships: [],
+    nextShipId: 1,
     pending: new CommandQueue(),
     ownableTiles: grids.reduce((sum, g) => sum + countOwnable(g), 0),
     winner: null,
-    changes: null,
+    log: null,
   };
   addFaction(world, "Neutral", "neutral");
   return world;

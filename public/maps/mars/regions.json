@@ -1,0 +1,7 @@
+{
+  "id": "mars",
+  "width": 400,
+  "height": 200,
+  "source": "generated (tools/mapgen/bodies.ts)",
+  "regions": []
+}

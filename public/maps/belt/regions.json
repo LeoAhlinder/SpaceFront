@@ -1,0 +1,7 @@
+{
+  "id": "belt",
+  "width": 360,
+  "height": 180,
+  "source": "generated (tools/mapgen/bodies.ts)",
+  "regions": []
+}

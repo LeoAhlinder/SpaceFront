@@ -51,6 +51,36 @@ export function hashWorld(world: World): number {
   }
 
   h.int(world.winner ?? -1);
+
+  h.int(world.structures.length);
+  for (const s of world.structures) {
+    h.int(s.id);
+    h.string(s.kind);
+    h.int(s.owner);
+    h.int(s.grid);
+    h.int(s.tile);
+    h.int(s.buildTicksLeft);
+  }
+
+  h.int(world.nextShipId);
+  h.int(world.ships.length);
+  for (const ship of world.ships) {
+    h.int(ship.id);
+    h.string(ship.kind);
+    h.int(ship.owner);
+    h.int(ship.troops);
+    h.int(ship.fromGrid);
+    h.int(ship.fromTile);
+    h.int(ship.toGrid);
+    h.int(ship.toTile);
+    h.int(ship.launchTick);
+    h.int(ship.arriveTick);
+    h.int(ship.waypoints.length);
+    for (const p of ship.waypoints) {
+      h.int(p.x);
+      h.int(p.y);
+    }
+  }
   h.int(world.bots.length);
   for (const b of world.bots) {
     h.int(b.faction);

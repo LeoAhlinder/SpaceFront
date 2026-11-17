@@ -18,7 +18,7 @@
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
     "gen:trig": "tsx tools/gen-trig.ts && prettier --write src/core/math/trigTable.ts",
-    "mapgen": "tsx tools/mapgen/earth.ts && prettier --write public/maps"
+    "mapgen": "tsx tools/mapgen/earth.ts && tsx tools/mapgen/bodies.ts && prettier --write public/maps"
   },
   "dependencies": {
     "@preact/signals": "2.11.4",

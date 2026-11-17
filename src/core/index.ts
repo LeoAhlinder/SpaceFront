@@ -4,11 +4,18 @@
  */
 export { addBot, aiSystem } from "./ai/bot";
 export { applyCommands, queueCommand } from "./commands/applyCommands";
-export type { AttackCommand, Command, SetRatioCommand, SpawnCommand } from "./commands/commands";
+export type {
+  AttackCommand,
+  BuildCommand,
+  Command,
+  LaunchCommand,
+  SetRatioCommand,
+  SpawnCommand,
+} from "./commands/commands";
 export { validateCommand } from "./commands/validate";
 export { TICK_MS } from "./constants";
 export { drainDelta, FACTION_STATS_STRIDE, trackChanges } from "./delta/delta";
-export type { TickDelta } from "./delta/delta";
+export type { ShipView, StructureView, TickDelta } from "./delta/delta";
 export { assert, AssertionError } from "./debug";
 export { RectGrid } from "./grid/rectGrid";
 export { isOwnableTerrain, Terrain, TERRAIN_COST_PCT } from "./grid/terrain";
@@ -21,7 +28,11 @@ export * from "./math/fixed";
 export { Rng } from "./math/rng";
 export { ANGLE_FULL, ANGLE_HALF, ANGLE_QUARTER, fxCos, fxSin } from "./math/trig";
 export { hashWorld } from "./serialize/hash";
-export { attackSystem, startAttack } from "./systems/attack";
+export { bodyPosition, distance, isqrt, pathLength, planFlight } from "./space/space";
+export type { Flight, Point } from "./space/space";
+export { attackSystem, beginAttack, startAttack } from "./systems/attack";
+export { applyLaunch, shipSystem } from "./systems/ships";
+export { applyBuild, constructionSystem, tooCloseToStructure } from "./systems/structures";
 export { populationCap, populationSystem } from "./systems/population";
 export { victorySystem } from "./systems/victory";
 export { runTick, runTicks, SYSTEMS } from "./tick";
@@ -34,9 +45,14 @@ export type {
   Attack,
   BodyConfig,
   BotState,
+  ChangeLog,
   Difficulty,
   Faction,
   FactionKind,
   MatchConfig,
+  Ship,
+  ShipKind,
+  Structure,
+  StructureKind,
   World,
 } from "./world/world";

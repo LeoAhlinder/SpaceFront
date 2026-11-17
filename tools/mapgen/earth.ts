@@ -29,6 +29,7 @@ import { encodeTerrain } from "../../src/core/map/terrainMap";
 import { sphereNoise } from "./noise";
 import { encodePngRgb } from "./png";
 import { heightForWidth, unproject } from "./projection";
+import { TERRAIN_RGB } from "./terrainColors";
 
 const WIDTH = Number(process.argv[2] ?? 800);
 const HEIGHT = heightForWidth(WIDTH);
@@ -252,20 +253,11 @@ function buildRegions(countries: Country[], grid: RectGrid, countryOf: Int32Arra
   return regions.sort((a, b) => b.tileCount - a.tileCount || a.code.localeCompare(b.code));
 }
 
-const COLORS: Record<number, [number, number, number]> = {
-  [Terrain.Space]: [5, 6, 15],
-  [Terrain.Ocean]: [22, 52, 96],
-  [Terrain.Plains]: [96, 140, 70],
-  [Terrain.Highlands]: [150, 140, 90],
-  [Terrain.Mountains]: [120, 110, 105],
-  [Terrain.Ice]: [225, 235, 240],
-};
-
 function preview(grid: RectGrid, countryOf: Int32Array): Buffer {
   const { width, height } = grid;
   const rgb = new Uint8Array(width * height * 3);
   for (let tile = 0; tile < grid.size; tile++) {
-    const [r, g, b] = COLORS[grid.terrain[tile]!]!;
+    const [r, g, b] = TERRAIN_RGB[grid.terrain[tile]!]!;
     const x = grid.x(tile);
     const ci = countryOf[tile]!;
     // Darken tiles on a country border (right or lower neighbor in another country).

@@ -22,10 +22,11 @@ const scratch = new Int32Array(8);
  * Adds a bot faction. Its first decision lands on a tick spread by its id, so
  * a crowd of bots doesn't all think on the same tick.
  */
-export function addBot(world: World, name: string): Faction {
+export function addBot(world: World, name: string, homeGrid: GridId | null = null): Faction {
   const faction = addFaction(world, name, "bot");
   world.bots.push({
     faction: faction.id,
+    homeGrid,
     rng: Rng.fromSeed(world.config.seed, BOT_STREAM_BASE + faction.id),
     nextDecisionTick: world.tick + (faction.id % B.decisionIntervalTicks),
   });
@@ -48,10 +49,10 @@ export const aiSystem: System = (world, ctx) => {
   }
 };
 
-/** Picks a random free, ownable tile on a random body. */
+/** Picks a random free, ownable tile on the bot's home body (or a random body). */
 function chooseSpawn(world: World, bot: BotState): Command | null {
   for (let i = 0; i < B.spawnAttempts; i++) {
-    const grid = world.grids[bot.rng.nextInt(world.grids.length)]!;
+    const grid = world.grids[bot.homeGrid ?? bot.rng.nextInt(world.grids.length)]!;
     const tile = bot.rng.nextInt(grid.size);
     if (grid.isUsable(tile) && isOwnableTerrain(grid.terrain[tile]!) && grid.owner[tile] === 0) {
       return { type: "spawn", faction: bot.faction, grid: grid.id, tile };

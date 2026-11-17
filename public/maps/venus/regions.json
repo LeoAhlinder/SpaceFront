@@ -1,0 +1,7 @@
+{
+  "id": "venus",
+  "width": 480,
+  "height": 240,
+  "source": "generated (tools/mapgen/bodies.ts)",
+  "regions": []
+}
