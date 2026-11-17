@@ -60,23 +60,30 @@ SpaceFront/
 │   │   ├── commands/      Command types, validation, CommandQueue
 │   │   ├── ai/            Bot AI, Nation AI, AI profiles
 │   │   ├── delta/         Collects changes each tick for the renderer / network
-│   │   ├── serialize/     Save/load, state hashing
+│   │   ├── serialize/     Binary saves (save.ts), state hashing (hash.ts)
 │   │   └── index.ts       Public API of core (the only file others import from)
-│   ├── worker/            SimHost: owns a World, runs ticks, talks to the main thread
+│   ├── worker/            SimHost: owns a World, runs ticks, talks to the main thread;
+│   │                      match.ts builds matches, replay.ts plays command logs
 │   ├── client/
 │   │   ├── bridge/        SimBridge: typed messages to and from the worker
 │   │   ├── store/         ClientStore: view state built from deltas
-│   │   ├── render/        PixiJS renderer, layers, camera, sprite atlas
-│   │   ├── input/         Mouse/keyboard/touch → commands
-│   │   ├── ui/            Preact components (HUD, menus, panels)
-│   │   ├── platform/      Platform interface + web implementation
+│   │   ├── render/        PixiJS renderer, layers, camera, sprite atlas and pooled sprite layers
+│   │   ├── audio/         Synthesized sound effects and generated music (Web Audio)
+│   │   ├── input/         Mouse/keyboard/touch → commands; the remappable keymap
+│   │   ├── ui/            Preact components (HUD, menus, settings, tutorial, saves)
+│   │   ├── platform/      Platform interface + web (IndexedDB) and desktop (Electron bridge) versions
+│   │   ├── saves.ts       Saved games and replays on the platform
+│   │   ├── settings.ts    Volume, graphics quality, keys (localStorage)
+│   │   ├── achievements.ts  Achievement ids and when they unlock
 │   │   └── main.ts        Entry point
 │   ├── data/              Game content as typed TS: bodies, nations, difficulty, balance
 │   └── shared/            Message types shared by worker and client (no logic)
-├── assets/                Sprites, map images, sounds (source files)
-├── tools/                 Build-time scripts (map generation, sin table, atlas packing)
-├── tests/                 Cross-module tests (determinism, replays)
-├── desktop/               (M5) Electron wrapper
+├── assets/                Sprite sources (generated, for review) and CREDITS.md
+├── public/                Served as is: maps/, atlas/atlas.svg (the sprite atlas)
+├── tools/                 Build-time scripts: map generation, sin table, atlas/, icon/ (app icon),
+│                          replays/ (records the test replays)
+├── tests/                 Cross-module tests (determinism, soak, saves, committed replays)
+├── desktop/               Electron wrapper (main process, preload bridge, Steam module, build config)
 └── server/                (M6) Multiplayer relay
 ```
 
@@ -333,13 +340,15 @@ Deltas are the only thing that leaves the worker each tick.
 ## 5. Worker ↔ client
 
 - `src/shared/messages.ts` defines every message as a discriminated union.
-- **Client → worker:** `start(setup)` (seed, map, bot count, player name, difficulty), `command(cmd)`, `pause`. Later: `setSpeed`, `save`, `load`.
+- **Client → worker:** `start(setup)` (seed, map, bot count, player name, difficulty, tutorial), `command(cmd)`, `pause`, `save` and `getReplay` (answered with `saveData` / `replayData`, matched by request id), `load(data)`, `watchReplay(data)`, `setSpeed` (replays).
 - **Worker → client:**
   - `init`: static data (player id, spawn phase length, ownable land and win share, grid terrain and owners, the Corona's shape and owners, faction names and kinds, nation ids and colonies' home nations, the starting alliances, the difficulty). Sent once per match. The client picks faction colors itself (nations' colors come from `data/nations.ts`).
   - `tick`: the delta. Sent every tick. Its typed arrays are **transferred**, not copied.
-  - `error`: the match failed to start
-  - Later: `event` messages for the UI, `saveData`
-- **SimHost** (`worker/simHost.ts`) owns the world in single-player: it loads the map files, builds the match (the player, then the difficulty's nations and colonies with `addNations`, then bots), runs `runTick` every `TICK_MS` and posts the delta. It only accepts commands for the player's own faction, and it stops the timer when someone wins. Its environment (posting, file loading, timers) is injected, so tests run it without a real worker.
+  - `error`: the match failed to start (or a save or replay could not be read)
+  - `saveData` / `replayData`: a gzipped save or a replay log, with a short summary for lists
+  - `replayEnded`: a replay reached its last tick, and whether its hash matched the recording
+  - `init` also carries the tick the match is at and a snapshot of structures, ships and fallout, so a loaded save draws at once
+- **SimHost** (`worker/simHost.ts`) owns the world in single-player: it loads the map files once, builds the match (`buildMatch` in `worker/match.ts`: the player, then the difficulty's nations and colonies with `addNations`, then bots; deterministic for a setup), runs `runTick` every `TICK_MS` (divided by the replay speed) and posts the delta. It only accepts commands for the player's own faction, records each with its tick (the replay log), and stops the timer when someone wins. Its environment (posting, file loading, timers) is injected, so tests run it without a real worker.
 - The client never sees the `World` object, only deltas. The same split works later when the deltas come from a server.
 
 ---
@@ -355,11 +364,14 @@ Deltas are the only thing that leaves the worker each tick.
   2. Orbits, the Sun, the Corona rings
   3. **Territory layer:** one texture per grid, where each pixel is one tile, tinted by owner color. Only changed tiles are rewritten, and the texture is re-uploaded once per frame at most.
   4. Borders (shader edge detection on the owner texture), terrain detail
-  5. Structures (sprites from a texture atlas)
-  6. Ships (sprites; batched; shown as icons when zoomed out)
-  7. Effects (explosions, beams, weapon trails)
+  5. Structures (sprites from the atlas, tinted with the owner's color)
+  6. Ships (sprites pointing along their route, with engine flames)
+  7. Effects (glows, shock rings and sparks drawn additively; beams and weapon trails as lines)
   8. Selection, hover and target markers
 - **Corona** (`render/coronaLayer.ts`): the `PolarGrid` is drawn into one square texture around the Sun. A lookup made once maps each pixel to its tile (and each tile to its pixels), so polar tiles appear as curved segments and a changed tile only repaints its own pixels. The Corona is played in the system view: a click that misses every body icon hits the Corona tile under it (`coronaTileAt`), and Sun Bases and siphons are drawn on their tiles there.
+- **Sprite atlas** (`render/atlas.ts`): `npm run atlas` draws every sprite as SVG in code (`tools/atlas/sprites.ts`) and packs them into `public/atlas/atlas.svg`, with typed frame rectangles in `render/atlasFrames.ts`. At start-up the SVG is rasterized once into a canvas texture with mipmaps, at 1× (Low quality) or 2× (High). Structures and ships are drawn in light grays so a tint gives the owner's color; glows and flames keep their own colors.
+- **Sprite layers** (`render/spriteLayer.ts`): each scene owns a few pools of sprites. Every frame it calls `begin()`, `add()` per sprite, `end()`; sprites are reused, never created per frame, and only changed properties are touched.
+- **What is redrawn when** (from the M5 performance pass, measured with `e2e/fps.spec.ts`): orbits around the Sun and keep-out zones are built once with 1-pixel lines; moon orbits are built once and moved with their planet. Territory and Corona textures are repainted in memory as tiles change, but only the view on screen is uploaded to the GPU. Ship routes are sampled from cached segment lengths (`PathCache`). Structures are grouped per world only when they change (`view.structuresVersion`), and the planet view skips sprites off screen.
 - **Interpolation:** the renderer runs at the display frame rate. It moves body and ship positions smoothly between the last two ticks.
 - **Level of detail:** in the system view, ships are grouped into counters when they overlap.
 - **Camera:** each view has its own camera (pan, zoom toward the cursor). Zooming far out of a planet view returns to the system view.
@@ -370,7 +382,10 @@ Deltas are the only thing that leaves the worker each tick.
 
 - **Preact** for HUD and menus (small and fast). The UI sits as normal DOM on top of the canvas.
 - Reads from `ClientStore` via signals. It never touches the renderer or worker directly. It sends commands through `SimBridge`.
-- Screens: Main menu → Match setup (difficulty, spawn) → In-game HUD → End screen.
+- Screens: Main menu (Play, Tutorial, Load game, Replays, Settings) → Match setup (difficulty) → In-game HUD (Esc opens the in-game menu: resume, save game, save replay, settings, quit) → End screen (save replay, play again). Replays show a bar with their speed (1×–16×) instead of the build buttons.
+- **Settings** (`client/settings.ts`, `ui/SettingsPanel.tsx`): master, music and effects volume, graphics quality (Low/High, applied on restart) and key remapping. Stored in localStorage; the keymap (`input/keymap.ts`) reads remapped keys from them.
+- **Tutorial** (`ui/Tutorial.tsx`): the `tutorial` match setup plus an eight-step guide; each step advances when the client sees it done (spawned, 300 tiles, a Spaceport placed and finished, the system view open, a lander launched).
+- **Sound** (`client/audio`): effects are synthesized with Web Audio from oscillators and filtered noise, triggered from deltas (`gameSounds.ts`); the music is generated (`music.ts`). Audio starts on the first click or key press.
 - HUD: Solars, troops/workers slider, attack ratio slider, build menu, faction list/leaderboard, event feed, minimap.
 - Diplomacy: clicking a leaderboard row (or right-clicking territory) opens a panel for that faction: ask, accept or break an alliance, gift 25% of your Solars or troops to an ally, embargo, "Peace?" and "Allies: attack them!". Incoming requests show with an Accept button, diplomacy messages as short notices, and allies in a list with a "Help!" button.
 
@@ -388,24 +403,28 @@ Deltas are the only thing that leaves the worker each tick.
   - `loadTerrainMap` in core validates both files. `createWorld(config, maps)` copies the terrain into the body's `RectGrid`. Loading the files from disk or network is the host's job (worker or tests), not core's.
   - **Earth** (`npm run mapgen`, `tools/mapgen/earth.ts`): Natural Earth countries, rasterized onto a flat 800×386 map with the **Miller cylindrical** projection (a softened Mercator) from 80°N to 60°S. It looks like a familiar world map. Countries are not shown at their true size (land far from the equator is enlarged), and Antarctica is cut off. Highlands and mountains come from seeded noise, not real elevation. A preview image goes to `docs/maps/earth-preview.png`.
   - **Other bodies** (M1): generated procedurally from a seed with noise, in the same file format.
-- Sprites are packed into an atlas by `tools/atlas`.
+- Sprites are drawn and packed into an atlas by `tools/atlas` (`npm run atlas`); see §6.
 
 ---
 
 ## 9. Saves, replays, platforms
 
-- **Save** = serialized `World` (binary: typed arrays + a JSON header with a version number).
-- **Replay** = seed + config + command log. Running it again gives the same game, which also makes it a strong test (see standards).
-- **Platform interface** (`client/platform`):
+- **Save** (`core/serialize/save.ts`): `saveWorld(world, header)` writes `"SFSV"`, a format version (u16), a JSON header (tick, the world's hash, and the caller's data: the player id, the match setup and the replay log so far), then the whole `World` as a tagged object graph: numbers, strings, arrays (int arrays packed), plain objects, Maps, Sets, typed arrays (raw bytes) and instances of registered core classes (`Rng`, `CommandQueue`, `RectGrid`, `PolarGrid`, `FrontierHeap`). Shared references are written once. `world.log` is not saved. `loadWorld` checks the version and that the loaded world reproduces the stored hash. **A new class in `World` must be registered in `save.ts`** (saving throws otherwise). The host gzips saves (`worker/compress.ts`).
+- **Replay** (`worker/replay.ts`) = the match setup (seed and config) + the player's commands with the tick each was queued on. AI commands are not stored: the AI runs inside the deterministic simulation and decides the same way again. Playing a replay builds the match from its setup and queues each command on its tick; at the end the hash is compared with the recorded one (a replay from another game version may play out differently, and the player is told). Committed replays in `tests/replays/` must reach their recorded hashes (`npm run replays:record` re-records them when gameplay changes on purpose).
+- **Platform interface** (`client/platform/platform.ts`):
   ```ts
   interface Platform {
+    readonly kind: "web" | "desktop";
     saveFile(name: string, data: Uint8Array): Promise<void>;
     loadFile(name: string): Promise<Uint8Array | null>;
+    listFiles(prefix: string): Promise<FileInfo[]>;
+    deleteFile(name: string): Promise<void>;
     unlockAchievement(id: string): void;
-    readonly kind: "web" | "desktop";
+    readonly cloudSaves: boolean;
   }
   ```
-  The web version uses IndexedDB. The desktop version (M5) uses the file system and Steamworks through Electron's preload bridge.
+  The web version keeps files in IndexedDB and has no achievements. The desktop version talks to the Electron main process through `window.spacefrontDesktop` (`desktop/preload.cjs`): files under the user data folder (written atomically), achievements and cloud status from `desktop/steam.cjs`, which is a no-op until steamworks.js is wired in ([STEAM.md](STEAM.md)). `client/saves.ts` stores each save as `saves/<id>.bin` plus `saves/<id>.json` (a small description for lists), replays likewise under `replays/` (the newest 30 are kept).
+- **Desktop app** (`desktop/`): Electron serves the built game (`dist/`, copied to `desktop/web/`) as `app://spacefront/`, so module workers and map fetches work as on the web. The window is sandboxed and context-isolated; the page gets only the bridge. electron-builder makes an unpacked folder (for Steam depots) and an installer per OS.
 
 ---
 
@@ -421,15 +440,16 @@ Prepared now, built later:
 
 ## 11. Tooling
 
-| Tool                     | Use                                                                     |
-| ------------------------ | ----------------------------------------------------------------------- |
-| TypeScript (strict)      | Language                                                                |
-| Vite                     | Dev server and build. Supports workers out of the box.                  |
-| PixiJS                   | Rendering                                                               |
-| Preact + @preact/signals | UI                                                                      |
-| Vitest                   | Unit and determinism tests                                              |
-| Playwright               | Browser smoke tests (from M1)                                           |
-| ESLint + Prettier        | Linting (including import rules and banned APIs in core) and formatting |
-| Electron + steamworks.js | Desktop/Steam build (M5)                                                |
+| Tool                        | Use                                                                      |
+| --------------------------- | ------------------------------------------------------------------------ |
+| TypeScript (strict)         | Language                                                                 |
+| Vite                        | Dev server and build. Supports workers out of the box.                   |
+| PixiJS                      | Rendering                                                                |
+| Preact + @preact/signals    | UI                                                                       |
+| Vitest                      | Unit and determinism tests                                               |
+| Playwright                  | Browser smoke tests (from M1)                                            |
+| ESLint + Prettier           | Linting (including import rules and banned APIs in core) and formatting  |
+| Electron + electron-builder | Desktop build (`desktop/`; installed on demand, see `desktop/README.md`) |
+| steamworks.js               | Steam (later; [STEAM.md](STEAM.md))                                      |
 
 Versions: pick the latest stable release of each when the project is set up, and pin exact versions in `package.json`.

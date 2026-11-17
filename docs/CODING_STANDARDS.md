@@ -52,6 +52,7 @@ These are the most important rules in the project. Breaking them causes desyncs 
 ### 3.3 State and systems
 
 - `World` is the single source of truth. No module-level mutable state in core (no caches outside `World`). The one exception is scratch buffers (e.g. the `out` array for `neighbors`), which are overwritten on every use and never carry data between calls.
+- Everything in `World` must survive a save: plain data, Maps, Sets, typed arrays, or a class registered in `core/serialize/save.ts`. No functions or closures in state.
 - A system is a function `(world, ctx) => void` in its own file under `core/systems/`. It does one job.
 - State changes only happen inside systems or `applyCommands`. AI only **queues commands**.
 - Every state change that the client must see is recorded in the delta (`ctx.delta`). A missing delta record shows up as a rendering bug, so the delta tests check for it.
@@ -73,7 +74,8 @@ Outside hot paths (UI, setup, tools), write the clearest code. Readability wins 
 - **The client never mutates game state.** It sends commands through `SimBridge` and draws what deltas say.
 - The renderer reads `ClientStore`, and the UI reads `ClientStore` signals. The UI and the renderer don't call each other.
 - Pixi objects are created once and reused (pooling for ships and effects). Never create sprites per frame.
-- Every texture and sprite comes from the atlas. No loose images loaded at runtime in-game.
+- Every texture and sprite comes from the atlas (`npm run atlas`). No loose images loaded at runtime in-game.
+- Sounds are synthesized in `client/audio`; no sample files. Platform features (files, achievements, cloud saves) only go through `client/platform`.
 - All user-facing text goes through `client/ui/strings.ts`, to make translation possible later.
 - Keyboard shortcuts are defined in one table (`client/input/keymap.ts`), so they can be remapped later.
 
@@ -118,16 +120,21 @@ Tests live next to the code as `*.test.ts`, except cross-module tests in `tests/
 
 ## 10. Scripts (target)
 
-| Script             | Does                                                        |
-| ------------------ | ----------------------------------------------------------- |
-| `npm run dev`      | Vite dev server                                             |
-| `npm run build`    | Production build into `dist/`                               |
-| `npm run check`    | `typecheck` + `lint` + `test`. Run before every commit.     |
-| `npm run test`     | Vitest                                                      |
-| `npm run bench`    | Benchmarks                                                  |
-| `npm run e2e`      | Playwright smoke tests (Edge locally, Chromium in CI)       |
-| `npm run mapgen`   | Regenerate the Earth map (`public/maps/earth`, `docs/maps`) |
-| `npm run gen:trig` | Regenerate the sine lookup table                            |
+| Script                   | Does                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| `npm run dev`            | Vite dev server                                                                 |
+| `npm run build`          | Production build into `dist/`                                                   |
+| `npm run check`          | `typecheck` + `lint` + `test`. Run before every commit.                         |
+| `npm run test`           | Vitest                                                                          |
+| `npm run bench`          | Benchmarks                                                                      |
+| `npm run e2e`            | Playwright smoke tests (Edge locally, Chromium in CI)                           |
+| `npm run mapgen`         | Regenerate the Earth map (`public/maps/earth`, `docs/maps`)                     |
+| `npm run gen:trig`       | Regenerate the sine lookup table                                                |
+| `npm run atlas`          | Redraw and pack the sprite atlas (`tools/atlas`)                                |
+| `npm run icon`           | Redraw the desktop app icon                                                     |
+| `npm run replays:record` | Re-record the committed test replays (only for intended gameplay changes)       |
+| `npm run desktop`        | Build the web client and run it in Electron (after installing it in `desktop/`) |
+| `npm run desktop:win`    | Windows desktop build into `desktop/release/`                                   |
 
 ## 11. Documentation
 

@@ -152,13 +152,23 @@ Status: every feature is covered by core tests (`systems/combat.test.ts`: shield
 
 ## M5 — Polish and desktop build
 
-- ☐ Final sprites and atlas, sound effects, music
-- ☐ Real relief for Earth from public-domain elevation data, replacing the noise-based highlands and mountains
-- ☐ Main menu, settings (keys, volume, graphics), tutorial match
-- ☐ Save/load + replays (`Platform` with IndexedDB)
-- ☐ Performance pass on low-end laptops
-- ☐ `desktop/`: Electron wrapper, file-system saves, Windows/macOS/Linux builds
-- ☐ Steamworks via steamworks.js: achievements, cloud saves (needs a Steamworks partner account and app id, which you set up)
+- ☑ Final sprites and atlas, sound effects, music: original procedural SVG atlas (`npm run atlas`), synthesized Web Audio effects and generated music (`assets/CREDITS.md`)
+- ☐ Real relief for Earth from public-domain elevation data, replacing the noise-based highlands and mountains (needs a dataset download; not started)
+- ☑ Main menu, settings (keys, volume, graphics), tutorial match
+- ☑ Save/load + replays (`Platform` with IndexedDB)
+- ☑ Performance pass on low-end laptops
+- ☑ `desktop/`: Electron wrapper, file-system saves, Windows/macOS/Linux build configs
+- ☐ Install Electron and electron-builder and make the first Windows build (large download: waits for the owner's go-ahead)
+- ☑ Steam hooks: `Platform.unlockAchievement` and `cloudSaves`, nine achievements, a no-op Steam module and [STEAM.md](STEAM.md)
+- ☐ Steamworks via steamworks.js: achievements, overlay, cloud saves (needs a Steamworks partner account and app id, which you set up; steps in [STEAM.md](STEAM.md))
+
+Status:
+
+- **Look and sound.** Every structure, ship, weapon, effect and planet icon is an atlas sprite drawn by code (`tools/atlas`), tinted with the owner's color; ships point where they fly and have engine flames. Effects and music are synthesized at runtime; nothing is downloaded. Play-tested in the browser.
+- **Menus.** Main menu (Play, Tutorial, Load game, Replays, Settings), match setup, settings (master/music/effects volume, Low/High graphics, remappable keys with conflict warnings, stored in localStorage), in-game menu on Esc (pauses), a pause key and quick save. The tutorial walks through spawning, expanding, building a Spaceport, the system view and launching a lander, each step advancing when it's done; play-tested to the end, and covered by `e2e/smoke.spec.ts`.
+- **Saves and replays.** Proven by tests: a Hard match saved at tick 1,200 and loaded continues with the original hashes for 600 ticks (`tests/serialize/saveLoad.test.ts`); through the host, a match with player commands saved at tick 200 and loaded, and its replay played from the start, both match the original run's hashes every 50 ticks (`src/worker/saveReplay.test.ts`); two committed replays reach their recorded hashes (`tests/replays/`). A gzipped save is ≈ 170 KB early and a few MB late in a match.
+- **Performance.** Measured with `SF_FPS=1 npm run e2e -- fps`: a 10-minute Impossible match (695 ships, 3,253 structures) loaded in Edge with the CPU slowed 4×. Before: planet view ≈ 117 fps, system view 29 fps (10.9 ms renderer CPU per frame; profile: Graphics re-tessellation of orbits, texture uploads of every world). After: system view ≈ 96 fps on High and 114 on Low (4.8 / 3.2 ms per frame), planet view unchanged. The simulation costs 0.5–0.65 ms per tick, so it needed nothing. Not measured on a real low-end laptop or GPU (headless Edge, slowed CPU only).
+- **Desktop.** `npm run desktop` / `desktop:win` once Electron is installed (see `desktop/README.md`). The production web build passes the smoke tests; the Electron app itself hasn't run yet.
 
 ---
 

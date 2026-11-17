@@ -266,16 +266,16 @@ OpenFront's code is open source under a copyleft license (AGPL, as far as I know
 
 ## 12. Milestones
 
-| #    | Milestone          | Done when                                                                                     |
-| ---- | ------------------ | --------------------------------------------------------------------------------------------- |
-| M0   | **Prototype**      | Earth only: tile map, territory spreading, attack slider, dumb bots, rendering in the browser |
-| M1   | **Solar system**   | All bodies on orbits, zoom/pan, Spaceports + Troop Landers between bodies                     |
-| M2   | **Economy**        | Solars, workers/troops split, Habitats, Freighter trade                                       |
-| M2.5 | **The Corona**     | Corona tiles and bands, Sun Bases, Corona territory spread and decay, **Solar Siphons**       |
-| M3   | **Nations**        | Earth countries + colonies, AI profiles, difficulty levels, alliances                         |
-| M4   | **Combat depth**   | Warships, Shield Generators, Orbital Defense, Kinetic Strike, Antimatter Warhead              |
-| M5   | **Polish**         | Sprites, sound, menus, tutorial, save/load, balance pass, Electron build                      |
-| M6   | **Steam + online** | Steamworks integration, store page, then online lobbies                                       |
+| #    | Milestone          | Done when                                                                                        |
+| ---- | ------------------ | ------------------------------------------------------------------------------------------------ |
+| M0   | **Prototype**      | Earth only: tile map, territory spreading, attack slider, dumb bots, rendering in the browser    |
+| M1   | **Solar system**   | All bodies on orbits, zoom/pan, Spaceports + Troop Landers between bodies                        |
+| M2   | **Economy**        | Solars, workers/troops split, Habitats, Freighter trade                                          |
+| M2.5 | **The Corona**     | Corona tiles and bands, Sun Bases, Corona territory spread and decay, **Solar Siphons**          |
+| M3   | **Nations**        | Earth countries + colonies, AI profiles, difficulty levels, alliances                            |
+| M4   | **Combat depth**   | Warships, Shield Generators, Orbital Defense, Kinetic Strike, Antimatter Warhead                 |
+| M5   | **Polish**         | Sprites, sound, menus, tutorial, save/load and replays, performance, Electron build, Steam hooks |
+| M6   | **Steam + online** | Steamworks integration, store page, then online lobbies                                          |
 
 ---
 
