@@ -7,12 +7,14 @@ const WHEEL_ZOOM_SPEED = 0.0015;
 
 /**
  * Mouse/touch on the game canvas: drag pans the camera, wheel zooms toward the
- * cursor, and a press without dragging is a click.
+ * cursor, and a press without dragging is a click. `camera` returns the camera
+ * of the view on screen; `onZoom` runs after every wheel zoom.
  */
 export function attachPointer(
   canvas: HTMLCanvasElement,
-  camera: Camera,
+  camera: () => Camera,
   onClick: (screenX: number, screenY: number) => void,
+  onZoom: () => void = () => undefined,
 ): void {
   let down: { x: number; y: number; lastX: number; lastY: number; dragging: boolean } | null = null;
 
@@ -26,7 +28,7 @@ export function attachPointer(
     if (!down.dragging && Math.hypot(e.offsetX - down.x, e.offsetY - down.y) > DRAG_THRESHOLD) {
       down.dragging = true;
     }
-    if (down.dragging) camera.panBy(e.offsetX - down.lastX, e.offsetY - down.lastY);
+    if (down.dragging) camera().panBy(e.offsetX - down.lastX, e.offsetY - down.lastY);
     down.lastX = e.offsetX;
     down.lastY = e.offsetY;
   });
@@ -42,7 +44,8 @@ export function attachPointer(
     "wheel",
     (e) => {
       e.preventDefault();
-      camera.zoomAt(e.offsetX, e.offsetY, Math.exp(-e.deltaY * WHEEL_ZOOM_SPEED));
+      camera().zoomAt(e.offsetX, e.offsetY, Math.exp(-e.deltaY * WHEEL_ZOOM_SPEED));
+      onZoom();
     },
     { passive: false },
   );

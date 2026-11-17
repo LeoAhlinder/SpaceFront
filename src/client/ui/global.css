@@ -125,16 +125,71 @@ button.primary:hover {
   font-weight: 600;
 }
 
-.banner {
+.top-center {
   position: absolute;
-  top: 70px;
+  top: 12px;
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: min(560px, calc(100vw - 32px));
+}
+
+.top-center .panel {
+  position: static;
+}
+
+.view-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.view-bar .hint {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+button {
+  padding: 6px 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+  background: rgb(255 255 255 / 6%);
+  color: var(--text);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+button:hover:not(:disabled) {
+  background: rgb(255 255 255 / 12%);
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+button.active {
+  border-color: var(--accent);
+  background: rgb(41 212 255 / 20%);
+}
+
+.alert {
+  border-color: rgb(255 107 107 / 50%);
+  background: rgb(255 107 107 / 18%);
+}
+
+.banner {
   padding: 8px 16px;
+  text-align: center;
   border-radius: 6px;
   background: rgb(41 212 255 / 18%);
   border: 1px solid rgb(41 212 255 / 45%);
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .leaderboard {
@@ -171,12 +226,18 @@ button.primary:hover {
   border-radius: 2px;
 }
 
-.sliders {
+.bottom-bar {
   bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
+  align-items: center;
   gap: 24px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
 }
 
 .slider {
@@ -201,7 +262,7 @@ button.primary:hover {
     min-width: 0;
   }
 
-  .sliders {
+  .bottom-bar {
     flex-direction: column;
     gap: 8px;
     width: calc(100vw - 52px);

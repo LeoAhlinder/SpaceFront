@@ -93,15 +93,15 @@ Outside hot paths (UI, setup, tools), write the clearest code. Readability wins 
 
 ## 8. Testing
 
-| What         | How                                                                                               | Required                                                                        |
-| ------------ | ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Core systems | Vitest unit tests with small hand-built worlds                                                    | For every system, and every bug fix gets a test                                 |
-| Determinism  | Run a match twice with the same seed and scripted commands. Hashes must match at every 50th tick. | Always on in CI                                                                 |
-| Replays      | Committed replay files in `tests/replays/`. Each must reach its recorded final hash.              | Update the hashes only when a gameplay change is intended, and say so in the PR |
-| Commands     | Valid and invalid cases for each command type                                                     | For every command                                                               |
-| AI           | Bot-vs-bot matches finish without errors and end with a winner within a tick limit                | From M3                                                                         |
-| Client       | Playwright smoke test: load page, start match, place spawn, see territory grow                    | From M1                                                                         |
-| Benchmarks   | `tests/bench/`                                                                                    | Run before merging perf-sensitive changes                                       |
+| What         | How                                                                                                                         | Required                                                                        |
+| ------------ | --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Core systems | Vitest unit tests with small hand-built worlds                                                                              | For every system, and every bug fix gets a test                                 |
+| Determinism  | Run a match twice with the same seed and scripted commands. Hashes must match at every 50th tick.                           | Always on in CI                                                                 |
+| Replays      | Committed replay files in `tests/replays/`. Each must reach its recorded final hash.                                        | Update the hashes only when a gameplay change is intended, and say so in the PR |
+| Commands     | Valid and invalid cases for each command type                                                                               | For every command                                                               |
+| AI           | Bot-vs-bot matches finish without errors and end with a winner within a tick limit                                          | From M3                                                                         |
+| Client       | Playwright smoke test (`e2e/`): load page, start match, place spawn, see territory, open the system view, no console errors | From M1                                                                         |
+| Benchmarks   | `tests/bench/`                                                                                                              | Run before merging perf-sensitive changes                                       |
 
 Tests live next to the code as `*.test.ts`, except cross-module tests in `tests/`.
 
@@ -125,7 +125,7 @@ Tests live next to the code as `*.test.ts`, except cross-module tests in `tests/
 | `npm run check`    | `typecheck` + `lint` + `test`. Run before every commit.     |
 | `npm run test`     | Vitest                                                      |
 | `npm run bench`    | Benchmarks                                                  |
-| `npm run e2e`      | Playwright smoke tests                                      |
+| `npm run e2e`      | Playwright smoke tests (Edge locally, Chromium in CI)       |
 | `npm run mapgen`   | Regenerate the Earth map (`public/maps/earth`, `docs/maps`) |
 | `npm run gen:trig` | Regenerate the sine lookup table                            |
 

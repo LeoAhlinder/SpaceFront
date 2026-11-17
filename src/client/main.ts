@@ -2,9 +2,10 @@ import { h, render } from "preact";
 import { log } from "../shared/log";
 import { createActions } from "./actions";
 import { SimBridge } from "./bridge/simBridge";
+import { attachKeys } from "./input/keymap";
 import { attachPointer } from "./input/pointer";
 import { GameRenderer } from "./render/renderer";
-import { applyWorkerMessage } from "./store/clientStore";
+import { applyWorkerMessage, ui } from "./store/clientStore";
 import { App } from "./ui/App";
 
 function element(id: string): HTMLElement {
@@ -20,12 +21,32 @@ async function main(): Promise<void> {
 
   bridge.onMessage((message) => {
     applyWorkerMessage(message);
-    if (message.type === "init") renderer.showMatch(message.init);
+    if (message.type === "init") renderer.setMatch(message.init);
   });
 
-  attachPointer(renderer.canvas, renderer.camera, (x, y) => {
-    const hit = renderer.tileAt(x, y);
-    if (hit) actions.clickTile(hit);
+  attachPointer(
+    renderer.canvas,
+    () => renderer.camera,
+    (x, y) => {
+      if (ui.view.value.kind === "system") {
+        const grid = renderer.system.gridAt(x, y, renderer.now());
+        if (grid !== null) actions.openPlanet(grid);
+      } else {
+        const hit = renderer.planet.tileAt(x, y);
+        if (hit) actions.clickTile(hit);
+      }
+    },
+    () => {
+      // Zooming far out of a world's map goes back to the solar system.
+      if (ui.view.value.kind === "planet" && renderer.planet.zoomedOut) actions.openSystem();
+    },
+  );
+
+  attachKeys({
+    cancel: actions.cancel,
+    toggleSystemView: actions.toggleSystemView,
+    buildSpaceport: () => actions.toggleMode("build"),
+    launchLander: () => actions.toggleMode("launch"),
   });
 
   render(h(App, { actions }), element("ui"));

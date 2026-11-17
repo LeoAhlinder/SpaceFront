@@ -7,7 +7,8 @@ import type { Command, FactionKind, TickDelta } from "../core";
 /** What the player picked in the menu. The worker turns it into a MatchConfig. */
 export interface MatchSetup {
   readonly seed: number;
-  readonly mapId: "earth";
+  /** Kept for future map choices; a match is always the solar system for now. */
+  readonly mapId: "sol";
   readonly botCount: number;
   readonly playerName: string;
 }
@@ -31,6 +32,8 @@ export interface MatchInit {
 
 export interface GridInit {
   readonly id: number;
+  /** Solar-system body this map belongs to (data/bodies.ts). */
+  readonly bodyId: string;
   readonly width: number;
   readonly height: number;
   /** Terrain per tile (copied, so the worker's world stays private). */

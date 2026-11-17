@@ -206,7 +206,7 @@ export default tseslint.config(
 
   // ---- tools & tests: node scripts, console allowed -----------------------------
   {
-    files: ["tools/**/*.ts", "tests/**/*.ts", "**/*.test.ts"],
+    files: ["tools/**/*.ts", "tests/**/*.ts", "e2e/**/*.ts", "**/*.test.ts", "*.config.ts"],
     languageOptions: { globals: globals.node },
     rules: { "no-console": "off" },
   },

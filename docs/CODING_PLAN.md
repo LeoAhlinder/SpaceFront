@@ -66,17 +66,17 @@ Status: playable in the browser against 40 bots. Checked in the desktop app's bu
 
 **Goal:** all bodies on orbits, and invading other bodies with Troop Landers.
 
-- ☐ `data/bodies.ts`: every body from the gameplay plan with map size, orbit, terrain profile, modifiers
-- ☐ Procedural terrain generator for non-Earth bodies (seeded noise → same map file format as Earth)
-- ☐ `orbitSystem`: positions from the tick number; compressed distances and orbit times
-- ☐ The Sun and its heat zone; gas giants as obstacles
-- ☐ Multiple grids in the world, a territory layer per body
-- ☐ System view (Sun, orbits, body icons tinted by main owner) and planet view (one flat map); click or zoom into an icon to open its map, zoom out or a "System" button to go back
-- ☐ Structures, part 1: `StructureStore`, `build` command, construction timers, **Spaceport**
-- ☐ Ships, part 1: `UnitStore`, `launch` command, path planning around the Sun and gas giants, aiming at where the target will be, **Troop Lander** landing → attack at the landing tile
-- ☐ Ship rendering with interpolation in the system view; landers appear on the target's map when they land; alerts to jump to the right planet
-- ☐ Spawn on any landable body; bots on every body
-- ☐ Playwright smoke test
+- ☑ `data/bodies.ts`: every body from the gameplay plan with map size, orbit, terrain profile (gameplay modifiers come with M2's economy)
+- ☑ Procedural terrain generator for non-Earth bodies (seeded noise → same map file format as Earth)
+- ☑ Orbits: positions computed from the tick number (`core/space`, no system needed); compressed distances and orbit times
+- ☑ The Sun and its heat zone; gas giants as obstacles (ships route around them)
+- ☑ Multiple grids in the world, a territory layer per body (with a color palette per world)
+- ☑ System view (Sun, orbits, body icons tinted by main owner) and planet view (one flat map); click an icon to open its map, zoom out or "System view" (M) to go back
+- ☑ Structures, part 1: `build` command, construction timers, capture with the tile, **Spaceport** (free until M2)
+- ☑ Ships, part 1: `launch` command, path planning around the Sun and gas giants, aiming at where the target will be, **Troop Lander** landing → attack at the landing tile; same-map hops across oceans
+- ☑ Ship rendering with interpolation in the system view; incoming landing spots marked on the target's map; alerts for enemy landers heading to your worlds (click to jump there)
+- ☑ Spawn on any landable body; bots on every body (one each first, the rest by land size)
+- ☑ Playwright smoke test (`npm run e2e`; Edge locally, Chromium in CI)
 
 **Done when:** you can start on Mars, build a Spaceport, send a Troop Lander and take territory on Earth while the planets move.
 

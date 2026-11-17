@@ -102,7 +102,7 @@ This keeps the simulation portable to a server and stops rendering code from rea
 - Each tick runs the systems **in a fixed order**:
 
   1. `applyCommands`: validate and apply this tick's commands
-  2. `orbitSystem`: update body positions (computed from the tick number)
+  2. (no orbit system: body positions are computed from the tick number on demand, see §4.6)
   3. `populationSystem`: population growth, troop/worker split
   4. `incomeSystem`: Solars from workers, trade, siphons
   5. `attackSystem`: territory spreading
@@ -139,8 +139,8 @@ interface World {
   factions: Faction[]; // index 0 = neutral; each keeps a list of its tiles
   tileSlots: Int32Array[]; // per grid: a tile's index in its owner's tile list
   bots: BotState[]; // per-bot RNG stream and next decision tick
-  units: UnitStore; // ships (struct-of-arrays)
-  structures: StructureStore; // buildings (struct-of-arrays)
+  ships: Ship[]; // in flight, with their planned route
+  structures: Structure[]; // id = index; structureAt[grid][tile] finds them
   attacks: Attack[];
   alliances: AllianceTable;
   pending: CommandQueue;
@@ -149,7 +149,7 @@ interface World {
 
 - **Faction ids are `uint16`.** 0 = neutral/unowned.
 - **Tile lists:** every faction keeps `tiles`, the TileRefs (`grid × 2^24 + tile`) it owns, kept in sync by `setOwner` with O(1) swap-removal through `tileSlots`. AI and attacks look at a faction's own land through this list instead of scanning whole grids.
-- **Entity stores** (units, structures) use struct-of-arrays with typed arrays and a free list for reuse, because thousands of ships may exist.
+- **Ships and structures** are plain object arrays for now (dozens to hundreds of them). If profiling shows thousands of ships cost too much, switch to struct-of-arrays with typed arrays and a free list.
 
 ### 4.4 Tile grids
 
@@ -182,8 +182,12 @@ A tile is identified by `(gridId, index)`. Code in hot loops only works with pla
 
 ### 4.6 Space and ships
 
-- Body positions are **computed, not stored**: `angle = phase + tick × angularSpeed`, then converted to a position with the trig table. Any tick's position can be computed directly, which is how ships aim at where a target will be.
-- When launched, a ship gets a **precomputed path**: a few waypoints that bend around the Sun's heat zone and the gas giants. Each tick it moves along the path. Planning happens once at launch, not every tick.
+- The solar system is data (`data/bodies.ts`): the Sun, planets, the belt, gas giants and moons, with compressed orbits (one Earth year = 9,000 ticks) in integer space units. In a solar-system match, grid _i_ is the _i_-th landable body, and `world.gridBodies` links each grid to its body.
+- Body positions are **computed, not stored** (`core/space`): `angle = phase + tick × 4096 / orbitTicks`, converted with the trig table; moons add their parent's position. Any tick's position can be computed directly, which is how ships aim at where a target will be.
+- When launched, a ship gets a **precomputed route** (`planFlight`): it aims at the target's position at arrival (refined a few times, since the arrival time depends on the route) and gets detour waypoints around the Sun's heat zone and gas giants (`avoidRadius`). The ship only stores its route and `arriveTick`; the shipSystem lands it on that tick. The client animates it along the route on its own.
+- A launch to a tile on the **same map** is a hop (e.g. across an ocean) with no space route; its duration comes from the tile distance.
+- **Landing:** on own land the troops join the faction. Otherwise the lander pays `landingCost` troops to take the tile, then starts (or joins) an attack on the tile's previous owner from that beachhead (`beginAttack`).
+- **Structures** (`systems/structures.ts`): built on own land with a minimum spacing, finished after a build timer by the constructionSystem, and captured along with their tile (`setOwner` checks `structureAt`). Only the Spaceport exists so far; it has no cost until Solars arrive (M2).
 - Combat checks use a **spatial hash** (grid buckets in space) so nearby ships are found without comparing every pair.
 
 ### 4.7 Commands
@@ -204,7 +208,7 @@ type Command =
       from: StructureId;
       toGrid: GridId;
       toTile: number;
-      troops?: number;
+      ratioPct: number; // percent of the faction's troops to send
     }
   | { type: "ally"; faction: FactionId; other: FactionId; action: "request" | "accept" | "break" }
   | { type: "gift"; faction: FactionId; to: FactionId; solars?: number; troops?: number }

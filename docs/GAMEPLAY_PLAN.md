@@ -159,12 +159,12 @@ Structures, spacecraft and weapons (below). Prices rise with how many of that th
 
 ## 6. Spacecraft (instead of naval ships)
 
-| Ship              | Role     | Behavior                                                                                                                      |
-| ----------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| **Troop Lander**  | Invasion | Carries a chunk of your troops to a target body. Lands and starts an attack at the landing spot. Can be shot down on the way. |
-| **Freighter**     | Trade    | Flies automatically between Spaceports and earns Solars. A prime target for Warships.                                         |
-| **Warship**       | Combat   | Patrols an area of space and attacks enemy Landers, Freighters and Siphons.                                                   |
-| **Sun Base ship** | Builder  | Carries a Sun Base to an empty Corona tile. It becomes a base on arrival.                                                     |
+| Ship              | Role     | Behavior                                                                                                                                                                                                               |
+| ----------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Troop Lander**  | Invasion | Carries a chunk of your troops to a target world, or across an ocean on the same world. Takes the landing tile and attacks from that beachhead; landing on your own land reinforces. Can be shot down on the way (M4). |
+| **Freighter**     | Trade    | Flies automatically between Spaceports and earns Solars. A prime target for Warships.                                                                                                                                  |
+| **Warship**       | Combat   | Patrols an area of space and attacks enemy Landers, Freighters and Siphons.                                                                                                                                            |
+| **Sun Base ship** | Builder  | Carries a Sun Base to an empty Corona tile. It becomes a base on arrival.                                                                                                                                              |
 
 Movement rules:
 

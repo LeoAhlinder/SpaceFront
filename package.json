@@ -18,7 +18,8 @@
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
     "gen:trig": "tsx tools/gen-trig.ts && prettier --write src/core/math/trigTable.ts",
-    "mapgen": "tsx tools/mapgen/earth.ts && tsx tools/mapgen/bodies.ts && prettier --write public/maps"
+    "mapgen": "tsx tools/mapgen/earth.ts && tsx tools/mapgen/bodies.ts && prettier --write public/maps",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@preact/signals": "2.11.4",
@@ -27,6 +28,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.65.1",
     "@preact/preset-vite": "2.10.6",
     "@types/geojson": "7946.0.16",
     "@types/node": "22.20.5",

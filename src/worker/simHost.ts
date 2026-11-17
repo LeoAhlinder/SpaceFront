@@ -1,12 +1,15 @@
 import { BALANCE } from "../data/balance";
-import type { MatchConfig, TerrainMap, World } from "../core";
+import { LANDABLE_BODIES } from "../data/bodies";
+import type { GridId, MatchConfig, TerrainMap, World } from "../core";
 import {
   addBot,
   addFaction,
   createWorld,
   drainDelta,
+  isOwnableTerrain,
   loadTerrainMap,
   queueCommand,
+  Rng,
   runTick,
   TICK_MS,
   trackChanges,
@@ -71,17 +74,24 @@ export class SimHost {
 
   private async start(setup: MatchSetup): Promise<void> {
     this.stop();
-    const map = await this.loadMap(setup.mapId);
+    // Every landable body of the solar system, grid i = LANDABLE_BODIES[i].
+    const maps = await Promise.all(LANDABLE_BODIES.map((b) => this.loadMap(b.map!.mapId)));
     const config: MatchConfig = {
       seed: setup.seed,
       difficulty: "normal",
-      bodies: [{ width: map.width, height: map.height, mapId: map.id }],
+      bodies: LANDABLE_BODIES.map((b) => ({
+        width: b.map!.width,
+        height: b.map!.height,
+        mapId: b.map!.mapId,
+        bodyId: b.id,
+      })),
       spawnPhaseTicks: BALANCE.match.spawnPhaseTicks,
     };
-    const world = createWorld(config, new Map([[map.id, map]]));
+    const world = createWorld(config, new Map(maps.map((m) => [m.id, m])));
     trackChanges(world);
     this.playerId = addFaction(world, setup.playerName, "player").id;
-    for (let i = 1; i <= setup.botCount; i++) addBot(world, `Bot ${i}`);
+    const homes = botHomes(world, setup.botCount, setup.seed);
+    homes.forEach((grid, i) => addBot(world, `Bot ${i + 1}`, grid));
     this.world = world;
     this.paused = false;
 
@@ -92,6 +102,7 @@ export class SimHost {
       winLandPct: BALANCE.match.winLandPct,
       grids: world.grids.map((g) => ({
         id: g.id,
+        bodyId: world.gridBodies[g.id] ?? "",
         width: g.width,
         height: g.height,
         terrain: g.terrain.slice(),
@@ -115,4 +126,30 @@ export class SimHost {
     if (this.timer !== null) this.env.clearInterval(this.timer);
     this.timer = null;
   }
+}
+
+/**
+ * Home maps for `count` bots: one on every body first, so no world starts
+ * empty, then the rest spread by how much land each body has.
+ */
+export function botHomes(world: World, count: number, seed: number): GridId[] {
+  const rng = Rng.fromSeed(seed, 7);
+  const land = world.grids.map((g) => {
+    let n = 0;
+    for (let t = 0; t < g.size; t++) if (isOwnableTerrain(g.terrain[t]!)) n++;
+    return n;
+  });
+  const total = land.reduce((a, b) => a + b, 0);
+  const homes: GridId[] = [];
+  for (let i = 0; i < count; i++) {
+    if (i < world.grids.length) {
+      homes.push(world.grids[i]!.id);
+      continue;
+    }
+    let pick = rng.nextInt(total);
+    let g = 0;
+    while (pick >= land[g]!) pick -= land[g++]!;
+    homes.push(world.grids[g]!.id);
+  }
+  return homes;
 }

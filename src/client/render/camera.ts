@@ -1,14 +1,16 @@
 import type { Container } from "pixi.js";
 
-const MIN_ZOOM = 0.3;
-const MAX_ZOOM = 40;
-
 /**
  * Pans and zooms the world container. World units are tiles; the camera's
  * zoom is screen pixels per tile.
  */
 export class Camera {
-  constructor(private readonly world: Container) {}
+  /** `minZoom`/`maxZoom` bound the zoom (screen pixels per world unit). */
+  constructor(
+    private readonly world: Container,
+    private readonly minZoom = 0.3,
+    private readonly maxZoom = 40,
+  ) {}
 
   get zoom(): number {
     return this.world.scale.x;
@@ -16,7 +18,11 @@ export class Camera {
 
   /** Centers a width × height area of world units on screen, filling `fill` of it. */
   fit(width: number, height: number, screenW: number, screenH: number, fill = 0.96): void {
-    const zoom = clamp(Math.min(screenW / width, screenH / height) * fill, MIN_ZOOM, MAX_ZOOM);
+    const zoom = clamp(
+      Math.min(screenW / width, screenH / height) * fill,
+      this.minZoom,
+      this.maxZoom,
+    );
     this.world.scale.set(zoom);
     this.world.position.set(screenW / 2, screenH / 2);
   }
@@ -28,7 +34,7 @@ export class Camera {
   /** Zooms by `factor`, keeping the world point under (screenX, screenY) in place. */
   zoomAt(screenX: number, screenY: number, factor: number): void {
     const before = this.screenToWorld(screenX, screenY);
-    const zoom = clamp(this.zoom * factor, MIN_ZOOM, MAX_ZOOM);
+    const zoom = clamp(this.zoom * factor, this.minZoom, this.maxZoom);
     this.world.scale.set(zoom);
     this.world.position.set(screenX - before.x * zoom, screenY - before.y * zoom);
   }

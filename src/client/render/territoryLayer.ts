@@ -1,6 +1,7 @@
 import { BufferImageSource, Sprite, Texture } from "pixi.js";
 import type { GridInit } from "../../shared/messages";
-import { mix, TERRAIN_COLORS } from "./colors";
+import type { TerrainPalette } from "./colors";
+import { mix } from "./colors";
 
 const SPACE = 0;
 /** How strongly an owner's color tints its land (0–1). */
@@ -24,6 +25,7 @@ export class TerritoryLayer {
     private readonly grid: GridInit,
     private readonly owners: Uint16Array,
     private readonly colorOf: (owner: number) => number,
+    private readonly palette: TerrainPalette,
   ) {
     this.width = grid.width;
     this.height = grid.height;
@@ -69,14 +71,14 @@ export class TerritoryLayer {
   }
 
   private paint(tile: number): void {
-    const terrain = this.grid.terrain[tile]! as keyof typeof TERRAIN_COLORS;
+    const terrain = this.grid.terrain[tile]! as keyof TerrainPalette;
     const p = tile * 4;
     if (terrain === SPACE) {
       this.pixels[p + 3] = 0;
       return;
     }
     const owner = this.owners[tile]!;
-    let color = TERRAIN_COLORS[terrain];
+    let color = this.palette[terrain];
     if (owner !== 0) {
       const ownerColor = this.colorOf(owner);
       color = this.isBorder(tile, owner)

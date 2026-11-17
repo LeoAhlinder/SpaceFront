@@ -1,7 +1,8 @@
 import type { Actions } from "../actions";
 import { cssColor } from "../render/colors";
 import type { FactionView } from "../store/clientStore";
-import { landShare, ui, view } from "../store/clientStore";
+import { landShare, ui, view, worldName } from "../store/clientStore";
+import { KEYMAP } from "../input/keymap";
 import { formatCount } from "./format";
 import { strings } from "./strings";
 
@@ -38,10 +39,16 @@ function Hud({ actions }: { actions: Actions }) {
   const me = ui.player.value;
   return (
     <>
-      <SpawnBanner />
+      <div class="top-center">
+        <ViewBar actions={actions} />
+        <SpawnBanner />
+        <ModeBanner />
+        <Alerts actions={actions} />
+      </div>
       {me && <StatsPanel me={me} />}
       <Leaderboard />
-      <div class="sliders panel">
+      <div class="bottom-bar panel">
+        <Actions actions={actions} />
         <Slider
           label={strings.attackRatio}
           value={ui.attackRatioPct.value}
@@ -54,6 +61,67 @@ function Hud({ actions }: { actions: Actions }) {
           onChange={actions.setTroopRatio}
         />
       </div>
+    </>
+  );
+}
+
+/** Which view is open, and the button to switch. */
+function ViewBar({ actions }: { actions: Actions }) {
+  const v = ui.view.value;
+  const key = KEYMAP.toggleSystemView.toUpperCase();
+  return (
+    <div class="view-bar panel">
+      <strong>{v.kind === "system" ? strings.solarSystem : worldName(v.grid)}</strong>
+      {v.kind === "planet" ? (
+        <button onClick={actions.openSystem}>{strings.systemView(key)}</button>
+      ) : (
+        <span class="hint">{strings.systemHint}</span>
+      )}
+    </div>
+  );
+}
+
+/** Build and launch buttons. */
+function Actions({ actions }: { actions: Actions }) {
+  const me = ui.player.value;
+  const spawned = !!me && me.tileCount > 0;
+  const mode = ui.mode.value;
+  const canLaunch = ui.readyPorts.value > 0;
+  return (
+    <div class="actions">
+      <button
+        class={mode === "build" ? "active" : ""}
+        disabled={!spawned}
+        onClick={() => actions.toggleMode("build")}
+      >
+        {strings.buildSpaceport(KEYMAP.buildSpaceport.toUpperCase())}
+      </button>
+      <button
+        class={mode === "launch" ? "active" : ""}
+        disabled={!spawned || !canLaunch}
+        title={canLaunch ? "" : strings.needSpaceport}
+        onClick={() => actions.toggleMode("launch")}
+      >
+        {strings.launchLander(KEYMAP.launchLander.toUpperCase())}
+      </button>
+    </div>
+  );
+}
+
+function ModeBanner() {
+  const mode = ui.mode.value;
+  if (mode === "none") return null;
+  return <div class="banner">{mode === "build" ? strings.buildHint : strings.launchHint}</div>;
+}
+
+function Alerts({ actions }: { actions: Actions }) {
+  return (
+    <>
+      {ui.alerts.value.map((a) => (
+        <button key={a.id} class="alert" onClick={() => actions.focusAlert(a.id, a.grid)}>
+          {a.text}
+        </button>
+      ))}
     </>
   );
 }

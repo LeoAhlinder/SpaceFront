@@ -1,8 +1,10 @@
-import { Application, Container, Graphics } from "pixi.js";
+import { Application, Graphics } from "pixi.js";
 import type { MatchInit } from "../../shared/messages";
-import { view } from "../store/clientStore";
-import { Camera } from "./camera";
-import { TerritoryLayer } from "./territoryLayer";
+import type { ViewState } from "../store/clientStore";
+import { ui, view } from "../store/clientStore";
+import type { Camera } from "./camera";
+import { PlanetScene } from "./planetScene";
+import { SystemScene } from "./systemScene";
 
 export interface TileHit {
   readonly grid: number;
@@ -10,24 +12,23 @@ export interface TileHit {
 }
 
 /**
- * Draws the match: a static starfield, and one territory layer per body
- * inside a camera-controlled world container. Reads `view`; never touches
- * the simulation.
+ * Draws the match in one of two views (GAMEPLAY_PLAN.md §2): the solar
+ * system, or one world's flat map. Follows `ui.view`; reads `view`; never
+ * touches the simulation.
  */
 export class GameRenderer {
-  readonly camera: Camera;
-  private readonly world = new Container();
-  private layers: TerritoryLayer[] = [];
+  readonly system = new SystemScene();
+  readonly planet = new PlanetScene();
+  private shown: ViewState | null = null;
 
   private constructor(readonly app: Application) {
-    this.camera = new Camera(this.world);
-    app.stage.addChild(starfield(), this.world);
+    app.stage.addChild(starfield(), this.system.container, this.planet.container);
     app.ticker.add(() => this.frame());
   }
 
   static async create(container: HTMLElement): Promise<GameRenderer> {
     const app = new Application();
-    await app.init({ resizeTo: window, background: "#05060f", antialias: false });
+    await app.init({ resizeTo: window, background: "#05060f", antialias: true });
     container.appendChild(app.canvas);
     return new GameRenderer(app);
   }
@@ -36,38 +37,36 @@ export class GameRenderer {
     return this.app.canvas;
   }
 
-  /** Builds the layers for a new match and frames the first body. */
-  showMatch(init: MatchInit): void {
-    for (const layer of this.layers) layer.destroy();
-    this.layers = init.grids.map(
-      (grid, i) =>
-        new TerritoryLayer(grid, view.owners[i]!, (owner) => view.factions.get(owner)?.color ?? 0),
-    );
-    for (const layer of this.layers) this.world.addChild(layer.sprite);
-    const first = this.layers[0];
-    if (first) {
-      this.camera.fit(first.width, first.height, this.app.screen.width, this.app.screen.height);
-    }
+  /** The camera of the view on screen. */
+  get camera(): Camera {
+    return ui.view.value.kind === "system" ? this.system.camera : this.planet.camera;
   }
 
-  /** The tile under a screen point, if any. */
-  tileAt(screenX: number, screenY: number): TileHit | null {
-    const p = this.camera.screenToWorld(screenX, screenY);
-    for (let grid = 0; grid < this.layers.length; grid++) {
-      const tile = this.layers[grid]!.tileAt(p.x, p.y);
-      if (tile >= 0) return { grid, tile };
-    }
-    return null;
+  setMatch(init: MatchInit): void {
+    this.planet.setMatch(init);
+    this.system.fit(this.app.screen.width, this.app.screen.height);
+    this.shown = null;
+  }
+
+  /** Simulation time right now, with a fraction for smooth motion between ticks. */
+  now(): number {
+    const since = (performance.now() - view.lastTickAt) / 100;
+    return ui.tick.value + Math.min(1, Math.max(0, since));
   }
 
   private frame(): void {
-    this.layers.forEach((layer, i) => {
-      const dirty = view.dirty[i];
-      if (dirty && dirty.length > 0) {
-        layer.redraw(dirty);
-        dirty.length = 0;
-      }
-    });
+    const target = ui.view.value;
+    if (target !== this.shown) {
+      this.shown = target;
+      const { width, height } = this.app.screen;
+      if (target.kind === "planet") this.planet.show(target.grid, width, height);
+    }
+    const inSystem = target.kind === "system";
+    this.system.container.visible = inSystem;
+    this.planet.container.visible = !inSystem;
+    const t = this.now();
+    this.planet.draw(t); // keeps every map's territory current even when hidden
+    if (inSystem) this.system.draw(t);
   }
 }
 
