@@ -158,7 +158,7 @@ Status: every feature is covered by core tests (`systems/combat.test.ts`: shield
 - ☑ Save/load + replays (`Platform` with IndexedDB)
 - ☑ Performance pass on low-end laptops
 - ☑ `desktop/`: Electron wrapper, file-system saves, Windows/macOS/Linux build configs
-- ☐ Install Electron and electron-builder and make the first Windows build (large download: waits for the owner's go-ahead)
+- ☐ Install Electron and electron-builder and make the first Windows build (on hold: the owner chose to skip the desktop app for now)
 - ☑ Steam hooks: `Platform.unlockAchievement` and `cloudSaves`, nine achievements, a no-op Steam module and [STEAM.md](STEAM.md)
 - ☐ Steamworks via steamworks.js: achievements, overlay, cloud saves (needs a Steamworks partner account and app id, which you set up; steps in [STEAM.md](STEAM.md))
 
