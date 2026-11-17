@@ -1,0 +1,79 @@
+{
+  "name": "spacefront-desktop",
+  "productName": "SpaceFront",
+  "version": "0.5.0",
+  "private": true,
+  "description": "SpaceFront desktop app (Electron wrapper of the web build)",
+  "main": "main.cjs",
+  "scripts": {
+    "build:web": "npm --prefix .. run build && node scripts/copy-web.mjs",
+    "start": "npm run build:web && electron .",
+    "dist:win": "npm run build:web && electron-builder --win",
+    "dist:mac": "npm run build:web && electron-builder --mac",
+    "dist:linux": "npm run build:web && electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.spacefront.game",
+    "productName": "SpaceFront",
+    "copyright": "Copyright © 2026 SpaceFront",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "steam.cjs",
+      "web/**/*"
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dir"
+        },
+        {
+          "target": "dmg"
+        }
+      ],
+      "category": "public.app-category.strategy-games",
+      "icon": "build/icon.png"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "dir"
+        },
+        {
+          "target": "AppImage"
+        },
+        {
+          "target": "tar.gz"
+        }
+      ],
+      "category": "Game",
+      "icon": "build/icon.png"
+    }
+  }
+}

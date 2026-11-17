@@ -21,7 +21,10 @@
     "mapgen": "tsx tools/mapgen/earth.ts && tsx tools/mapgen/bodies.ts && prettier --write public/maps",
     "e2e": "playwright test",
     "atlas": "tsx tools/atlas/pack.ts && prettier --write src/client/render/atlasFrames.ts tools/atlas",
-    "replays:record": "tsx tools/replays/record.ts && prettier --write tests/replays"
+    "replays:record": "tsx tools/replays/record.ts && prettier --write tests/replays",
+    "icon": "tsx tools/icon/makeIcon.ts",
+    "desktop": "npm --prefix desktop start",
+    "desktop:win": "npm --prefix desktop run dist:win"
   },
   "dependencies": {
     "@preact/signals": "2.11.4",

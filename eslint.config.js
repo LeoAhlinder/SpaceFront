@@ -85,7 +85,7 @@ const SIM_GLOBALS = [
 ].map((name) => ({ name, message: `${name} is not allowed in the deterministic simulation.` }));
 
 export default tseslint.config(
-  { ignores: ["dist/", "coverage/", "node_modules/"] },
+  { ignores: ["dist/", "coverage/", "node_modules/", "desktop/web/", "desktop/release/"] },
 
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
@@ -109,9 +109,9 @@ export default tseslint.config(
     },
   },
 
-  // Plain JS files (configs) are not part of the TS project.
+  // Plain JS files (configs, the Electron wrapper in desktop/) are not part of the TS project.
   {
-    files: ["**/*.js"],
+    files: ["**/*.js", "**/*.cjs", "**/*.mjs"],
     ...tseslint.configs.disableTypeChecked,
     languageOptions: {
       ...tseslint.configs.disableTypeChecked.languageOptions,
@@ -208,6 +208,20 @@ export default tseslint.config(
   {
     files: ["tools/**/*.ts", "tests/**/*.ts", "e2e/**/*.ts", "**/*.test.ts", "*.config.ts"],
     languageOptions: { globals: globals.node },
+    rules: { "no-console": "off" },
+  },
+
+  // The Electron main process and preload are CommonJS (Electron loads them with require).
+  {
+    files: ["desktop/**/*.cjs"],
+    languageOptions: { sourceType: "commonjs" },
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+      "no-console": "off",
+    },
+  },
+  {
+    files: ["desktop/scripts/**/*.mjs"],
     rules: { "no-console": "off" },
   },
 
