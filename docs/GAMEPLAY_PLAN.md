@@ -27,10 +27,12 @@ Decisions so far:
 
 ### Layout
 
-- One continuous 2D map with the **Sun** at the center and planets on circular orbits.
+- Two levels of view:
+  - **System view:** the **Sun** at the center and every body as an **icon** on its circular orbit, colored by who owns most of it. Ships fly between the icons. The Corona ring around the Sun is drawn here too.
+  - **Planet view:** clicking or zooming into a body's icon opens its **flat map**, where you expand, build and fight. A planet's map never moves or rotates while you play on it; zooming out (or a "System" button) returns to the system view.
 - Distances and orbit times are **compressed** so the game stays playable. Distances are roughly log-scaled, and one Earth orbit takes about 15 minutes of game time. Inner planets orbit faster, so Mercury and Venus "sweep" past Earth.
 - Every **landable body is a flat map of pixel tiles**, like the world map in OpenFront, not a globe. Earth is a familiar flat world map; countries are not shown at their true size. Territory spreads across tiles. Space between bodies works like the ocean: land troops cannot cross it, only spacecraft can.
-- Zooming in shows a planet's terrain. Zooming out shows the whole system with territory colors and ship icons.
+- Ships launched from a planet leave its map, travel in the system view, and appear on the target's map when they land. Alerts (e.g. "Troop Lander approaching Mars") let you jump to the right planet.
 
 ### Bodies (first version)
 

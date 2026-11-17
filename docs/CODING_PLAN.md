@@ -67,13 +67,14 @@ Status: playable in the browser against 40 bots. Checked in the desktop app's bu
 **Goal:** all bodies on orbits, and invading other bodies with Troop Landers.
 
 - ☐ `data/bodies.ts`: every body from the gameplay plan with map size, orbit, terrain profile, modifiers
-- ☐ Procedural terrain generator for non-Earth bodies (seeded noise → same PNG format as Earth)
+- ☐ Procedural terrain generator for non-Earth bodies (seeded noise → same map file format as Earth)
 - ☐ `orbitSystem`: positions from the tick number; compressed distances and orbit times
 - ☐ The Sun and its heat zone; gas giants as obstacles
-- ☐ Multiple grids in the world, render layer per body, zoomed-out level of detail
+- ☐ Multiple grids in the world, a territory layer per body
+- ☐ System view (Sun, orbits, body icons tinted by main owner) and planet view (one flat map); click or zoom into an icon to open its map, zoom out or a "System" button to go back
 - ☐ Structures, part 1: `StructureStore`, `build` command, construction timers, **Spaceport**
 - ☐ Ships, part 1: `UnitStore`, `launch` command, path planning around the Sun and gas giants, aiming at where the target will be, **Troop Lander** landing → attack at the landing tile
-- ☐ Ship rendering with interpolation, icons when zoomed out
+- ☐ Ship rendering with interpolation in the system view; landers appear on the target's map when they land; alerts to jump to the right planet
 - ☐ Spawn on any landable body; bots on every body
 - ☐ Playwright smoke test
 

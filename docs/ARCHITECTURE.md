@@ -278,6 +278,10 @@ Deltas are the only thing that leaves the worker each tick.
 
 ## 6. Rendering (`client/render`)
 
+- **Two views** (GAMEPLAY_PLAN.md §2):
+  - **System view:** the Sun, orbits, the Corona ring, each body as an icon at its orbital position (tinted by its main owner), and ships in flight.
+  - **Planet view:** one body's flat map (its territory layer), not affected by orbits. Clicking or zooming into an icon switches to it; zooming out or a "System" button switches back.
+  - Only the visible view is drawn every frame; the other views' territory textures keep receiving tile updates, so switching is instant.
 - **PixiJS** (WebGL, with WebGPU when available). Layers from back to front:
   1. Starfield background (static)
   2. Orbits, the Sun, the Corona rings
@@ -289,8 +293,8 @@ Deltas are the only thing that leaves the worker each tick.
   8. Selection, hover and target markers
 - **Corona:** its `PolarGrid` texture is drawn onto a ring mesh, so polar tiles appear as curved segments.
 - **Interpolation:** the renderer runs at the display frame rate. It moves body and ship positions smoothly between the last two ticks.
-- **Level of detail:** zoomed out, planets become small icons colored by their main owner, and ships are grouped into counters.
-- **Camera:** pan, zoom toward the cursor, follow a body (the camera moves along with its orbit).
+- **Level of detail:** in the system view, ships are grouped into counters when they overlap.
+- **Camera:** each view has its own camera (pan, zoom toward the cursor). Zooming far out of a planet view returns to the system view.
 
 ---
 
