@@ -1,6 +1,7 @@
 import { BALANCE } from "../../data/balance";
 import { CommandQueue } from "../commands/commandQueue";
 import { DiscGrid } from "../grid/discGrid";
+import { isOwnableTerrain } from "../grid/terrain";
 import type { FactionId, GridId } from "../ids";
 import { factionId, gridId, MAX_FACTION_ID, NEUTRAL } from "../ids";
 import type { TerrainMap } from "../map/terrainMap";
@@ -24,6 +25,11 @@ export interface MatchConfig {
   readonly seed: number;
   readonly difficulty: Difficulty;
   readonly bodies: readonly BodyConfig[];
+  /**
+   * Ticks at the start when factions may only spawn: no attacks and no
+   * population growth. Default 0 (tests); real matches use BALANCE.match.
+   */
+  readonly spawnPhaseTicks?: number;
 }
 
 /** A player, bot or nation. All numbers are integers. */
@@ -95,6 +101,16 @@ export interface World {
   nextAttackId: number;
   /** Commands waiting for their tick. */
   readonly pending: CommandQueue;
+  /** Ownable land tiles across all grids, for the win condition. Fixed at creation. */
+  readonly ownableTiles: number;
+  /** The faction that won, or null while the match is running. */
+  winner: FactionId | null;
+  /**
+   * Tiles whose owner changed since the host last drained them (see
+   * core/delta). Null means nobody is listening, so nothing is recorded.
+   * Not game state: it is never hashed or saved.
+   */
+  changes: TileRef[] | null;
 }
 
 /**
@@ -117,9 +133,23 @@ export function createWorld(
     attacks: [],
     nextAttackId: 1,
     pending: new CommandQueue(),
+    ownableTiles: grids.reduce((sum, g) => sum + countOwnable(g), 0),
+    winner: null,
+    changes: null,
   };
   addFaction(world, "Neutral", "neutral");
   return world;
+}
+
+function countOwnable(grid: DiscGrid): number {
+  let n = 0;
+  for (let i = 0; i < grid.size; i++) if (isOwnableTerrain(grid.terrain[i]!)) n++;
+  return n;
+}
+
+/** True while the match is still in its spawn phase. */
+export function inSpawnPhase(world: World): boolean {
+  return world.tick < (world.config.spawnPhaseTicks ?? 0);
 }
 
 function createGrid(index: number, body: BodyConfig, maps: ReadonlyMap<string, TerrainMap>) {

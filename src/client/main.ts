@@ -1,9 +1,11 @@
 import { h, render } from "preact";
 import { log } from "../shared/log";
+import { createActions } from "./actions";
 import { SimBridge } from "./bridge/simBridge";
-import { createRenderer } from "./render/renderer";
+import { attachPointer } from "./input/pointer";
+import { GameRenderer } from "./render/renderer";
 import { applyWorkerMessage } from "./store/clientStore";
-import { Hud } from "./ui/Hud";
+import { App } from "./ui/App";
 
 function element(id: string): HTMLElement {
   const el = document.getElementById(id);
@@ -12,14 +14,21 @@ function element(id: string): HTMLElement {
 }
 
 async function main(): Promise<void> {
-  await createRenderer(element("game"));
-  render(h(Hud, {}), element("ui"));
-
+  const renderer = await GameRenderer.create(element("game"));
   const bridge = new SimBridge();
+  const actions = createActions(bridge);
+
   bridge.onMessage((message) => {
     applyWorkerMessage(message);
-    if (message.type === "ready") bridge.send({ type: "start" });
+    if (message.type === "init") renderer.showMatch(message.init);
   });
+
+  attachPointer(renderer.canvas, renderer.camera, (x, y) => {
+    const hit = renderer.tileAt(x, y);
+    if (hit) actions.clickTile(hit);
+  });
+
+  render(h(App, { actions }), element("ui"));
 }
 
 main().catch((error: unknown) => log.error("SpaceFront failed to start", error));

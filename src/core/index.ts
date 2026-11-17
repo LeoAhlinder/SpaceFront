@@ -7,6 +7,8 @@ export { applyCommands, queueCommand } from "./commands/applyCommands";
 export type { AttackCommand, Command, SetRatioCommand, SpawnCommand } from "./commands/commands";
 export { validateCommand } from "./commands/validate";
 export { TICK_MS } from "./constants";
+export { drainDelta, FACTION_STATS_STRIDE, trackChanges } from "./delta/delta";
+export type { TickDelta } from "./delta/delta";
 export { assert, AssertionError } from "./debug";
 export { DiscGrid } from "./grid/discGrid";
 export { isOwnableTerrain, Terrain, TERRAIN_COST_PCT } from "./grid/terrain";
@@ -21,12 +23,13 @@ export { ANGLE_FULL, ANGLE_HALF, ANGLE_QUARTER, fxCos, fxSin } from "./math/trig
 export { hashWorld } from "./serialize/hash";
 export { attackSystem, startAttack } from "./systems/attack";
 export { populationCap, populationSystem } from "./systems/population";
+export { victorySystem } from "./systems/victory";
 export { runTick, runTicks, SYSTEMS } from "./tick";
 export type { RejectedCommand, System, TickContext } from "./tick";
 export { eliminate, setOwner } from "./world/territory";
 export { refGrid, refTile, tileRef } from "./world/tileRef";
 export type { TileRef } from "./world/tileRef";
-export { addFaction, createWorld } from "./world/world";
+export { addFaction, createWorld, inSpawnPhase } from "./world/world";
 export type {
   Attack,
   BodyConfig,

@@ -48,14 +48,17 @@ How to read the tasks: each one is roughly one PR. `☐` = not started.
 
 ### M0.6 Worker and client
 
-- ☐ `shared/messages.ts`; `worker/simHost.ts` with the fixed tick timer and pause
-- ☐ `core/delta`: tile-owner changes + faction stats
-- ☐ `client/bridge` + `client/store`
-- ☐ Renderer: territory texture updated from deltas, borders, camera pan/zoom
-- ☐ Input: click to spawn, click to attack; attack ratio slider
-- ☐ Minimal HUD: troops, workers, tile count, a leaderboard
+- ☑ `shared/messages.ts`; `worker/simHost.ts` with the fixed tick timer and pause
+- ☑ `core/delta`: tile-owner changes + faction stats
+- ☑ `client/bridge` + `client/store`
+- ☑ Renderer: territory texture updated from deltas, borders, camera pan/zoom
+- ☑ Input: click to spawn, click to attack; attack ratio slider
+- ☑ Minimal HUD: troops, workers, tile count, a leaderboard
+- ☑ Spawn phase and victory (80% of the land or last one standing), with an end screen
 
 **Done when:** you can play a full match on Earth against ~40 bots in Chrome and Firefox at 60 FPS, and win by reaching 80% of the land.
+
+Status: playable in the browser against 40 bots. Checked in the desktop app's built-in browser (Chromium) at the display's refresh rate (120 FPS, no frame over 16.6 ms). Still to check by hand: Firefox, and playing a full match to the win screen (the win logic is unit-tested).
 
 ---
 

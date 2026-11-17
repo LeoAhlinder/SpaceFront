@@ -1,10 +1,8 @@
-import { TICK_MS } from "../core";
-import type { ClientMessage, WorkerMessage } from "../shared/messages";
-
 /**
- * SimHost placeholder: owns the tick timer. In M0.2+ it will own a World and
- * run the systems each tick; for now it only proves the worker pipeline works.
+ * Worker entry point: forwards messages to the SimHost and posts its output.
  */
+import type { ClientMessage, WorkerMessage } from "../shared/messages";
+import { SimHost } from "./simHost";
 
 /** The parts of the worker global scope we use (the DOM lib lacks worker types). */
 interface WorkerScope {
@@ -14,31 +12,15 @@ interface WorkerScope {
 
 const scope = self as unknown as WorkerScope;
 
-let tick = 0;
-let paused = true;
-let timer: ReturnType<typeof setInterval> | undefined;
+const host = new SimHost({
+  post: (message, transfer) => scope.postMessage(message, transfer),
+  loadFile: async (path) => {
+    const response = await fetch(`${import.meta.env.BASE_URL}${path}`);
+    if (!response.ok) throw new Error(`Failed to load ${path}: ${response.status}`);
+    return new Uint8Array(await response.arrayBuffer());
+  },
+  setInterval: (fn, ms) => setInterval(fn, ms),
+  clearInterval: (handle) => clearInterval(handle as ReturnType<typeof setInterval>),
+});
 
-function post(message: WorkerMessage): void {
-  scope.postMessage(message);
-}
-
-function step(): void {
-  if (paused) return;
-  tick += 1;
-  post({ type: "tick", tick });
-}
-
-scope.onmessage = (event: MessageEvent<ClientMessage>) => {
-  const message = event.data;
-  switch (message.type) {
-    case "start":
-      paused = false;
-      timer ??= setInterval(step, TICK_MS);
-      break;
-    case "pause":
-      paused = message.paused;
-      break;
-  }
-};
-
-post({ type: "ready" });
+scope.onmessage = (event) => host.handle(event.data);

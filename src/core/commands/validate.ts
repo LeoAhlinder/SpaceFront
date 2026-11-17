@@ -1,5 +1,6 @@
 import { isOwnableTerrain } from "../grid/terrain";
 import type { World } from "../world/world";
+import { inSpawnPhase } from "../world/world";
 import type { Command } from "./commands";
 
 /**
@@ -26,6 +27,7 @@ export function validateCommand(world: World, command: Command): string | null {
     }
     case "attack": {
       if (!faction.hasSpawned) return "not spawned yet";
+      if (inSpawnPhase(world)) return "spawn phase";
       if (!isPercent(command.ratioPct)) return "ratio must be an integer 1–100";
       const grid = world.grids[command.grid];
       if (!grid) return "unknown grid";

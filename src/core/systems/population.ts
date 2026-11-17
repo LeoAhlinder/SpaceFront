@@ -1,6 +1,7 @@
 import { BALANCE } from "../../data/balance";
 import type { System } from "../tick";
 import type { Faction } from "../world/world";
+import { inSpawnPhase } from "../world/world";
 
 const P = BALANCE.population;
 
@@ -16,6 +17,7 @@ export function populationCap(tiles: number): number {
  * the faction's troop ratio.
  */
 export const populationSystem: System = (world) => {
+  if (inSpawnPhase(world)) return;
   for (const faction of world.factions) {
     if (!faction.alive || !faction.hasSpawned) continue;
     grow(faction);

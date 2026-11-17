@@ -246,26 +246,32 @@ type Command =
 
 ### 4.9 Deltas
 
-After each tick, `core/delta` collects what changed:
+After each tick, the host calls `drainDelta(world)` (`core/delta`) to collect what changed:
 
-- Tiles whose owner changed: `(gridId, index, newOwner)` packed into a `Uint32Array`
-- Faction stats: troops, workers, Solars, tile count
-- Ships spawned, moved or destroyed, and structures built or destroyed
-- Events for the UI: "alliance requested", "nuke incoming", "siphon captured"
+- Tiles whose owner changed: `(grid, tile, owner)` triples in a `Uint32Array`. `setOwner` records changed tiles in `world.changes`, but only after the host calls `trackChanges(world)`; tests and servers that don't listen record nothing. `world.changes` is not game state and is never hashed.
+- Faction stats: `id, alive, troops, workers, tileCount` per faction in a `Float64Array` (Solars come with M2)
+- The winner, or -1
+- Later: ships spawned, moved or destroyed, structures built or destroyed, and events for the UI ("alliance requested", "nuke incoming", "siphon captured")
 
 Deltas are the only thing that leaves the worker each tick.
+
+### 4.10 Match flow
+
+- **Spawn phase:** `MatchConfig.spawnPhaseTicks` (100 ticks = 10 s in real matches, 0 in tests). During it, attacks are rejected and population doesn't grow, so everyone gets to pick a spot first.
+- **Victory** (`victorySystem`, last each tick): the first faction to own `winLandPct` (80%) of all ownable land wins, or the last faction standing. Factions that haven't spawned yet still count as in the game. Core keeps simulating after a win; the host decides to stop.
 
 ---
 
 ## 5. Worker ↔ client
 
 - `src/shared/messages.ts` defines every message as a discriminated union.
-- **Client → worker:** `start(matchConfig)`, `command(cmd)`, `pause`, `setSpeed`, `save`, `load`.
+- **Client → worker:** `start(setup)` (seed, map, bot count, player name), `command(cmd)`, `pause`. Later: `setSpeed`, `save`, `load`.
 - **Worker → client:**
-  - `init`: static data (grid sizes, terrain arrays, faction names and colors). Sent once.
-  - `tick`: delta and tick number. Sent every tick. Typed arrays are **transferred**, not copied.
-  - `event`: messages for the UI
-  - `saveData`: a finished save
+  - `init`: static data (player id, spawn phase length, ownable land and win share, grid terrain and owners, faction names and kinds). Sent once per match. The client picks faction colors itself.
+  - `tick`: the delta. Sent every tick. Its typed arrays are **transferred**, not copied.
+  - `error`: the match failed to start
+  - Later: `event` messages for the UI, `saveData`
+- **SimHost** (`worker/simHost.ts`) owns the world in single-player: it loads the map files, builds the match, runs `runTick` every `TICK_MS` and posts the delta. It only accepts commands for the player's own faction, and it stops the timer when someone wins. Its environment (posting, file loading, timers) is injected, so tests run it without a real worker.
 - The client never sees the `World` object, only deltas. The same split works later when the deltas come from a server.
 
 ---

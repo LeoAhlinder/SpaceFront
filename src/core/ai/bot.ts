@@ -8,7 +8,7 @@ import { Rng } from "../math/rng";
 import type { System } from "../tick";
 import { refGrid, refTile } from "../world/tileRef";
 import type { BotState, Faction, World } from "../world/world";
-import { addFaction } from "../world/world";
+import { addFaction, inSpawnPhase } from "../world/world";
 
 const B = BALANCE.bot;
 
@@ -66,6 +66,7 @@ function chooseSpawn(world: World, bot: BotState): Command | null {
  * never attacks anyone stronger.
  */
 function decide(world: World, bot: BotState, faction: Faction): Command | null {
+  if (inSpawnPhase(world)) return null;
   if (faction.troops < B.minTroops || faction.tiles.length === 0) return null;
   let running = 0;
   for (const a of world.attacks) if (a.attacker === bot.faction) running++;

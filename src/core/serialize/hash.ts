@@ -49,6 +49,7 @@ export function hashWorld(world: World): number {
     h.ints(a.frontier.tiles);
   }
 
+  h.int(world.winner ?? -1);
   h.int(world.bots.length);
   for (const b of world.bots) {
     h.int(b.faction);

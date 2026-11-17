@@ -3,6 +3,7 @@ import { applyCommands } from "./commands/applyCommands";
 import type { Command } from "./commands/commands";
 import { attackSystem } from "./systems/attack";
 import { populationSystem } from "./systems/population";
+import { victorySystem } from "./systems/victory";
 import type { World } from "./world/world";
 
 /** A command that was dropped this tick, and why (logged in debug builds). */
@@ -23,9 +24,15 @@ export type System = (world: World, ctx: TickContext) => void;
 
 /**
  * The systems in the order they run each tick (ARCHITECTURE.md §4.1).
- * Still to come: orbit, income, ships, combat, construction, corona, victory.
+ * Still to come: orbit, income, ships, combat, construction, corona.
  */
-export const SYSTEMS: readonly System[] = [applyCommands, populationSystem, attackSystem, aiSystem];
+export const SYSTEMS: readonly System[] = [
+  applyCommands,
+  populationSystem,
+  attackSystem,
+  aiSystem,
+  victorySystem,
+];
 
 /** Runs one tick: every system in order, then advances the tick counter. */
 export function runTick(world: World, systems: readonly System[] = SYSTEMS): TickContext {

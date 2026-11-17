@@ -12,6 +12,7 @@ export function setOwner(world: World, grid: TileGrid, tile: number, newOwner: F
   const oldOwner = grid.owner[tile]!;
   if (oldOwner === newOwner) return;
   grid.owner[tile] = newOwner;
+  world.changes?.push(tileRef(grid.id, tile));
   const slots = world.tileSlots[grid.id]!;
   if (oldOwner !== NEUTRAL) {
     // Swap-remove the tile from the loser's list.

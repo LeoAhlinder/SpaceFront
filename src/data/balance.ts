@@ -9,6 +9,15 @@ export const BALANCE = {
   /** Simulation ticks per second. */
   ticksPerSecond: 10,
 
+  match: {
+    /** Spawn phase at the start of a match: 10 seconds to pick a spot. */
+    spawnPhaseTicks: 100,
+    /** Owning this percent of all ownable land wins (Corona excluded later). */
+    winLandPct: 80,
+    /** Bots in a default single-player match. */
+    defaultBotCount: 40,
+  },
+
   spawn: {
     /** Tiles within this many steps of the spawn tile are claimed. */
     radius: 4,
