@@ -2,12 +2,13 @@ import { BALANCE } from "../../data/balance";
 import type { System } from "../tick";
 import type { Faction } from "../world/world";
 import { inSpawnPhase } from "../world/world";
+import { finishedCounts, weightedModifier } from "../world/modifiers";
 
 const P = BALANCE.population;
 
-/** Population cap for a faction with `tiles` tiles. */
-export function populationCap(tiles: number): number {
-  return P.capBase + tiles * P.capPerTile;
+/** Population cap for a faction with `tiles` tiles and `habitats` finished Habitats. */
+export function populationCap(tiles: number, habitats = 0): number {
+  return P.capBase + tiles * P.capPerTile + habitats * BALANCE.structures.habitat.popCap;
 }
 
 /**
@@ -18,20 +19,21 @@ export function populationCap(tiles: number): number {
  */
 export const populationSystem: System = (world) => {
   if (inSpawnPhase(world)) return;
+  const habitats = finishedCounts(world, "habitat");
   for (const faction of world.factions) {
     if (!faction.alive || !faction.hasSpawned) continue;
-    grow(faction);
+    grow(faction, habitats[faction.id] ?? 0, weightedModifier(world, faction, "growthPct"));
     rebalance(faction);
   }
 };
 
-function grow(faction: Faction): void {
+function grow(faction: Faction, habitats: number, growthPct: number): void {
   const pop = faction.troops + faction.workers;
-  const cap = populationCap(faction.tileCount);
+  const cap = populationCap(faction.tileCount, habitats);
   let growth: number;
   if (pop <= cap) {
     const rate = P.growthBase + Math.floor((pop * P.growthPermille) / 1000);
-    growth = Math.floor((rate * (cap - pop)) / cap);
+    growth = Math.floor((((rate * (cap - pop)) / cap) * growthPct) / 100);
   } else {
     // Gentle decay: a big surplus (e.g. after losing land) drains over time.
     growth = -Math.max(1, Math.floor(((pop - cap) * P.overCapDecayPermille) / 1000));

@@ -5,6 +5,7 @@ import { isOwnableTerrain } from "../grid/terrain";
 import type { FactionId, GridId } from "../ids";
 import { NEUTRAL } from "../ids";
 import { Rng } from "../math/rng";
+import { buildCost, tooCloseToStructure } from "../systems/structures";
 import type { System } from "../tick";
 import { refGrid, refTile } from "../world/tileRef";
 import type { BotState, Faction, World } from "../world/world";
@@ -49,6 +50,26 @@ export const aiSystem: System = (world, ctx) => {
   }
 };
 
+/**
+ * Sometimes builds on a random own tile: a first Spaceport (which starts
+ * trade), or a Habitat. Never anything else, and never a second Spaceport.
+ */
+function maybeBuild(world: World, bot: BotState, faction: Faction): Command | null {
+  const ref = faction.tiles[bot.rng.nextInt(faction.tiles.length)]!;
+  const grid = refGrid(ref);
+  const tile = refTile(ref);
+  if (tooCloseToStructure(world, grid, tile)) return null;
+  const hasPort = world.structures.some((s) => s.owner === bot.faction && s.kind === "spaceport");
+  for (const kind of ["spaceport", "habitat"] as const) {
+    if (kind === "spaceport" && hasPort) continue;
+    const chance = kind === "spaceport" ? B.buildPortChancePct : B.buildHabitatChancePct;
+    if (!bot.rng.chance(chance, 100)) continue;
+    if (faction.solars < buildCost(world, bot.faction, kind, grid)) continue;
+    return { type: "build", faction: bot.faction, kind, grid, tile };
+  }
+  return null;
+}
+
 /** Picks a random free, ownable tile on the bot's home body (or a random body). */
 function chooseSpawn(world: World, bot: BotState): Command | null {
   for (let i = 0; i < B.spawnAttempts; i++) {
@@ -67,8 +88,10 @@ function chooseSpawn(world: World, bot: BotState): Command | null {
  * never attacks anyone stronger.
  */
 function decide(world: World, bot: BotState, faction: Faction): Command | null {
-  if (inSpawnPhase(world)) return null;
-  if (faction.troops < B.minTroops || faction.tiles.length === 0) return null;
+  if (inSpawnPhase(world) || faction.tiles.length === 0) return null;
+  const build = maybeBuild(world, bot, faction);
+  if (build) return build;
+  if (faction.troops < B.minTroops) return null;
   let running = 0;
   for (const a of world.attacks) if (a.attacker === bot.faction) running++;
   if (running >= B.maxRunningAttacks) return null;

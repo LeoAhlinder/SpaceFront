@@ -1,8 +1,8 @@
 import { refGrid, refTile } from "../world/tileRef";
 import type { ShipKind, StructureKind, World } from "../world/world";
 
-/** Numbers per faction in TickDelta.stats: id, alive (0/1), troops, workers, tileCount. */
-export const FACTION_STATS_STRIDE = 5;
+/** Numbers per faction in TickDelta.stats: id, alive (0/1), troops, workers, tileCount, solars. */
+export const FACTION_STATS_STRIDE = 6;
 
 /** A structure's current state, sent whenever it is built, finished or captured. */
 export interface StructureView {
@@ -80,6 +80,7 @@ export function drainDelta(world: World): TickDelta {
     stats[o + 2] = f.troops;
     stats[o + 3] = f.workers;
     stats[o + 4] = f.tileCount;
+    stats[o + 5] = f.solars;
   }
 
   const structures = [...new Set(log?.structures ?? [])].map((id) => {

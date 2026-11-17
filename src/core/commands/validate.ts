@@ -1,7 +1,7 @@
 import { isOwnableTerrain } from "../grid/terrain";
 import type { World } from "../world/world";
 import { inSpawnPhase } from "../world/world";
-import { tooCloseToStructure } from "../systems/structures";
+import { buildCost, tooCloseToStructure } from "../systems/structures";
 import type { Command } from "./commands";
 
 /**
@@ -44,14 +44,17 @@ export function validateCommand(world: World, command: Command): string | null {
       return isPercent(command.troopRatioPct) ? null : "ratio must be an integer 1–100";
     case "build": {
       if (!faction.hasSpawned) return "not spawned yet";
-      if (command.kind !== "spaceport") return "unknown structure";
+      if (command.kind !== "spaceport" && command.kind !== "habitat") return "unknown structure";
       const grid = world.grids[command.grid];
       if (!grid) return "unknown grid";
       if (!isTileIndex(command.tile, grid.size)) return "tile is not on the map";
       if (grid.owner[command.tile] !== command.faction) return "not your land";
       if (!isOwnableTerrain(grid.terrain[command.tile]!)) return "terrain can't be built on";
-      return tooCloseToStructure(world, command.grid, command.tile)
-        ? "too close to another structure"
+      if (tooCloseToStructure(world, command.grid, command.tile)) {
+        return "too close to another structure";
+      }
+      return faction.solars < buildCost(world, command.faction, command.kind, command.grid)
+        ? "not enough Solars"
         : null;
     }
     case "launch": {

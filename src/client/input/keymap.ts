@@ -6,6 +6,7 @@ export const KEYMAP = {
   cancel: "Escape",
   toggleSystemView: "m",
   buildSpaceport: "b",
+  buildHabitat: "h",
   launchLander: "l",
 } as const;
 

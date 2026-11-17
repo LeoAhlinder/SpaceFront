@@ -87,11 +87,22 @@ export class PlanetScene {
       if (s.grid !== this.active) continue;
       const p = toWorld(s.tile);
       const color = view.factions.get(s.owner)?.color ?? 0xffffff;
-      const half = PORT_SIZE / 2;
-      g.rect(p.x - half, p.y - half, PORT_SIZE, PORT_SIZE)
-        .fill({ color, alpha: s.buildTicksLeft > 0 ? 0.45 : 1 })
-        .stroke({ width: Math.max(0.3, 1.5 * px), color: 0xffffff });
-      g.circle(p.x, p.y, PORT_SIZE / 5).fill(0xffffff);
+      const alpha = s.buildTicksLeft > 0 ? 0.45 : 1;
+      const outline = { width: Math.max(0.3, 1.5 * px), color: 0xffffff };
+      if (s.kind === "spaceport") {
+        // A square with a dot: the launch pad.
+        const half = PORT_SIZE / 2;
+        g.rect(p.x - half, p.y - half, PORT_SIZE, PORT_SIZE)
+          .fill({ color, alpha })
+          .stroke(outline);
+        g.circle(p.x, p.y, PORT_SIZE / 5).fill(0xffffff);
+      } else {
+        // A dome: the Habitat.
+        g.circle(p.x, p.y, PORT_SIZE / 2.2)
+          .fill({ color, alpha })
+          .stroke(outline);
+        g.rect(p.x - PORT_SIZE / 4, p.y, PORT_SIZE / 2, PORT_SIZE / 10).fill(0xffffff);
+      }
     }
 
     // Landers hopping across this map, and landers arriving from space.
@@ -107,11 +118,17 @@ export class PlanetScene {
         );
         const x = from.x + (target.x - from.x) * f;
         const y = from.y + (target.y - from.y) * f;
+        if (ship.kind === "freighter") {
+          // Freighters: small squares, no route line.
+          const r = Math.max(0.8, 3 * px);
+          g.rect(x - r, y - r, 2 * r, 2 * r).fill({ color, alpha: 0.8 });
+          continue;
+        }
         g.moveTo(x, y).lineTo(target.x, target.y).stroke({ width: px, color, alpha: 0.5 });
         g.circle(x, y, Math.max(1.2, 4 * px))
           .fill(color)
           .stroke({ width: px, color: 0x000000 });
-      } else {
+      } else if (ship.kind === "troopLander") {
         // Incoming from another world: mark the landing spot.
         g.circle(target.x, target.y, Math.max(2, 7 * px)).stroke({ width: 1.5 * px, color });
       }

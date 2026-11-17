@@ -23,6 +23,14 @@ export const BALANCE = {
     radius: 4,
     troops: 2_000,
     workers: 1_000,
+    /** Solars every faction starts with. */
+    solars: 500,
+  },
+
+  /** Solars (☉), the only currency (GAMEPLAY_PLAN.md §5). See docs/BALANCE.md for pacing. */
+  economy: {
+    /** Solars per tick = workers × this / 1000 (× the worlds' income modifiers). */
+    workerIncomePermille: 2,
   },
 
   population: {
@@ -78,15 +86,44 @@ export const BALANCE = {
     weakerThanPct: 70,
     /** Chance per decision to attack a weaker neighbor while neutral land remains. */
     attackChancePct: 25,
+    /** Chance per decision to build a Spaceport (if it has none and can afford it). */
+    buildPortChancePct: 10,
+    /** Chance per decision to build a Habitat (if it can afford it). */
+    buildHabitatChancePct: 5,
     attackRatioMinPct: 30,
     attackRatioMaxPct: 50,
   },
 
   structures: {
-    /** Ticks to finish building a Spaceport (no Solar cost until M2). */
-    spaceportBuildTicks: 50,
     /** No two structures closer than this many steps (Manhattan) on a map. */
     minSpacing: 6,
+    /** Each structure of a kind you already own makes the next one cost this percent more. */
+    costStepPct: 50,
+    spaceport: {
+      cost: 1_000,
+      buildTicks: 50,
+      /** A finished Spaceport sends a Freighter every interval + 0..jitter ticks. */
+      tradeIntervalTicks: 200,
+      tradeJitterTicks: 100,
+    },
+    habitat: {
+      cost: 800,
+      buildTicks: 40,
+      /** Extra population cap per finished Habitat. */
+      popCap: 3_000,
+      /** Extra Solars per tick per finished Habitat. */
+      income: 2,
+    },
+  },
+
+  trade: {
+    /** Solars each side earns per delivered Freighter: base + route length × perUnit / 1000. */
+    base: 60,
+    perUnitPermille: 60,
+    /** Tile hops on one map count this many space units per tile. */
+    unitsPerTile: 4,
+    /** Freighter speed in space units per tick. */
+    freighterSpeed: 10,
   },
 
   ships: {

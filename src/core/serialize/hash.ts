@@ -25,6 +25,7 @@ export function hashWorld(world: World): number {
     h.int(f.troops);
     h.int(f.workers);
     h.int(f.solars);
+    h.int(f.solarsMilli);
     h.int(f.tileCount);
   }
 
@@ -60,6 +61,7 @@ export function hashWorld(world: World): number {
     h.int(s.grid);
     h.int(s.tile);
     h.int(s.buildTicksLeft);
+    h.int(s.nextTradeTick);
   }
 
   h.int(world.nextShipId);
@@ -73,6 +75,7 @@ export function hashWorld(world: World): number {
     h.int(ship.fromTile);
     h.int(ship.toGrid);
     h.int(ship.toTile);
+    h.int(ship.toStructure);
     h.int(ship.launchTick);
     h.int(ship.arriveTick);
     h.int(ship.waypoints.length);

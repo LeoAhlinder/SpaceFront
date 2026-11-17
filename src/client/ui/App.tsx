@@ -1,7 +1,10 @@
 import type { Actions } from "../actions";
 import { cssColor } from "../render/colors";
 import type { FactionView } from "../store/clientStore";
-import { landShare, ui, view, worldName } from "../store/clientStore";
+import { BALANCE } from "../../data/balance";
+import type { BodyDef } from "../../data/bodies";
+import { bodyById, modifierOf, structureCost } from "../../data/bodies";
+import { landShare, ownedCount, ui, view, worldName } from "../store/clientStore";
 import { KEYMAP } from "../input/keymap";
 import { formatCount } from "./format";
 import { strings } from "./strings";
@@ -69,9 +72,18 @@ function Hud({ actions }: { actions: Actions }) {
 function ViewBar({ actions }: { actions: Actions }) {
   const v = ui.view.value;
   const key = KEYMAP.toggleSystemView.toUpperCase();
+  const body = v.kind === "planet" ? worldBody(v.grid) : null;
+  const mods = body?.modifiers ?? {};
   return (
     <div class="view-bar panel">
       <strong>{v.kind === "system" ? strings.solarSystem : worldName(v.grid)}</strong>
+      {(Object.keys(strings.modifierNames) as (keyof typeof strings.modifierNames)[]).map((k) =>
+        mods[k] !== undefined && mods[k] !== 100 ? (
+          <span key={k} class={`mod ${mods[k] > 100 !== (k === "buildCostPct") ? "good" : "bad"}`}>
+            {strings.modifier(strings.modifierNames[k], mods[k])}
+          </span>
+        ) : null,
+      )}
       {v.kind === "planet" ? (
         <button onClick={actions.openSystem}>{strings.systemView(key)}</button>
       ) : (
@@ -81,28 +93,56 @@ function ViewBar({ actions }: { actions: Actions }) {
   );
 }
 
-/** Build and launch buttons. */
+/** Build and launch buttons, with live costs for the open world. */
 function Actions({ actions }: { actions: Actions }) {
   const me = ui.player.value;
   const spawned = !!me && me.tileCount > 0;
   const mode = ui.mode.value;
   const canLaunch = ui.readyPorts.value > 0;
+  const v = ui.view.value;
+  const worldPct = v.kind === "planet" ? modifierOf(worldBody(v.grid), "buildCostPct") : 100;
+  const costOf = (kind: "spaceport" | "habitat") =>
+    structureCost(
+      BALANCE.structures[kind].cost,
+      BALANCE.structures.costStepPct,
+      ownedCount(kind),
+      worldPct,
+    );
+  const buildButton = (kind: "spaceport" | "habitat", label: string, info: string) => {
+    const cost = costOf(kind);
+    const affordable = !!me && me.solars >= cost;
+    return (
+      <button
+        class={`build ${mode === kind ? "active" : ""}`}
+        disabled={!spawned || !affordable}
+        title={info}
+        onClick={() => actions.toggleMode(kind)}
+      >
+        <span>{label}</span>
+        <span class="cost">{strings.cost(formatCount(cost))}</span>
+      </button>
+    );
+  };
   return (
     <div class="actions">
+      {buildButton(
+        "spaceport",
+        strings.buildSpaceport(KEYMAP.buildSpaceport.toUpperCase()),
+        strings.spaceportInfo,
+      )}
+      {buildButton(
+        "habitat",
+        strings.buildHabitat(KEYMAP.buildHabitat.toUpperCase()),
+        strings.habitatInfo,
+      )}
       <button
-        class={mode === "build" ? "active" : ""}
-        disabled={!spawned}
-        onClick={() => actions.toggleMode("build")}
-      >
-        {strings.buildSpaceport(KEYMAP.buildSpaceport.toUpperCase())}
-      </button>
-      <button
-        class={mode === "launch" ? "active" : ""}
+        class={`build ${mode === "launch" ? "active" : ""}`}
         disabled={!spawned || !canLaunch}
         title={canLaunch ? "" : strings.needSpaceport}
         onClick={() => actions.toggleMode("launch")}
       >
-        {strings.launchLander(KEYMAP.launchLander.toUpperCase())}
+        <span>{strings.launchLander(KEYMAP.launchLander.toUpperCase())}</span>
+        <span class="cost">{ui.attackRatioPct.value}%</span>
       </button>
     </div>
   );
@@ -111,7 +151,13 @@ function Actions({ actions }: { actions: Actions }) {
 function ModeBanner() {
   const mode = ui.mode.value;
   if (mode === "none") return null;
-  return <div class="banner">{mode === "build" ? strings.buildHint : strings.launchHint}</div>;
+  const text =
+    mode === "spaceport"
+      ? strings.buildHint
+      : mode === "habitat"
+        ? strings.habitatHint
+        : strings.launchHint;
+  return <div class="banner">{text}</div>;
 }
 
 function Alerts({ actions }: { actions: Actions }) {
@@ -137,6 +183,7 @@ function StatsPanel({ me }: { me: FactionView }) {
   const goal = view.init?.winLandPct ?? 80;
   return (
     <div class="stats panel">
+      <Stat label={strings.solars} value={`${formatCount(me.solars)} ☉`} />
       <Stat label={strings.troops} value={formatCount(me.troops)} />
       <Stat label={strings.workers} value={formatCount(me.workers)} />
       <Stat
@@ -217,4 +264,10 @@ function EndOverlay({ onPlay }: { onPlay: () => void }) {
       </button>
     </div>
   );
+}
+
+/** The solar-system body a grid belongs to. */
+function worldBody(grid: number): BodyDef | undefined {
+  const id = view.init?.grids[grid]?.bodyId;
+  return id ? bodyById(id) : undefined;
 }

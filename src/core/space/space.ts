@@ -66,8 +66,12 @@ export interface Flight {
  * arrival time depends on the path) and bends around the Sun's heat zone and
  * the gas giants.
  */
-export function planFlight(fromId: string, toId: string, tick: number): Flight {
-  const speed = BALANCE.ships.landerSpeed;
+export function planFlight(
+  fromId: string,
+  toId: string,
+  tick: number,
+  speed: number = BALANCE.ships.landerSpeed,
+): Flight {
   const start = bodyPosition(fromId, tick);
   let arrive = tick + BALANCE.ships.minFlightTicks;
   for (let i = 0; i < 4; i++) {

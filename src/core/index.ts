@@ -32,7 +32,15 @@ export { bodyPosition, distance, isqrt, pathLength, planFlight } from "./space/s
 export type { Flight, Point } from "./space/space";
 export { attackSystem, beginAttack, startAttack } from "./systems/attack";
 export { applyLaunch, shipSystem } from "./systems/ships";
-export { applyBuild, constructionSystem, tooCloseToStructure } from "./systems/structures";
+export {
+  applyBuild,
+  buildCost,
+  constructionSystem,
+  tooCloseToStructure,
+} from "./systems/structures";
+export { incomeSystem } from "./systems/income";
+export { deliver, tradeSystem } from "./systems/trade";
+export { finishedCounts, gridModifier, weightedModifier } from "./world/modifiers";
 export { populationCap, populationSystem } from "./systems/population";
 export { victorySystem } from "./systems/victory";
 export { runTick, runTicks, SYSTEMS } from "./tick";

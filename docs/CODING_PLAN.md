@@ -86,13 +86,15 @@ Status: playable in the browser against 40 bots. Checked in the desktop app's bu
 
 **Goal:** Solars and a reason to build.
 
-- ☐ `incomeSystem`: worker income × land quality and body modifiers
-- ☐ Solars in HUD; build menu with costs that rise with how many you own
-- ☐ **Habitat** (+population cap, +income)
-- ☐ **Freighter** trade: auto-launch between Spaceports of different factions, pay by distance, both sides earn
-- ☐ Balance pass 1: put every number in `data/balance.ts` and write a short balance notes file
+- ☑ `incomeSystem`: worker income × the worlds' income modifiers (averaged over the faction's land)
+- ☑ World modifiers (income, growth, defense, build cost) per body, shown in the view bar
+- ☑ Solars in HUD; build menu with costs that rise with how many you own
+- ☑ **Habitat** (+population cap, +income)
+- ☑ **Freighter** trade: auto-launch between Spaceports of different factions, pay by distance, both sides earn
+- ☑ Bots build a Spaceport and Habitats, so there are trade partners
+- ☑ Balance pass 1: every number in `data/balance.ts`; notes in [BALANCE.md](BALANCE.md)
 
-**Done when:** a player who builds and trades clearly beats one who doesn't.
+**Done when:** a player who builds and trades clearly beats one who doesn't. ✔ Checked by a test: over 10 minutes, builder ≈ 3.6× the Solars and 2.3× the population of an idle faction.
 
 ---
 

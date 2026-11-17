@@ -31,12 +31,14 @@ export function setOwner(world: World, grid: TileGrid, tile: number, newOwner: F
     }
     slots[tile] = -1;
     loser.tileCount -= 1;
+    loser.gridTiles[grid.id] = loser.gridTiles[grid.id]! - 1;
   }
   if (newOwner !== NEUTRAL) {
     const winner = world.factions[newOwner]!;
     slots[tile] = winner.tiles.length;
     winner.tiles.push(tileRef(grid.id, tile));
     winner.tileCount += 1;
+    winner.gridTiles[grid.id] = winner.gridTiles[grid.id]! + 1;
   }
   if (oldOwner !== NEUTRAL) {
     const loser = world.factions[oldOwner]!;

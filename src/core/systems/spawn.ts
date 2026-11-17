@@ -36,4 +36,5 @@ export function applySpawn(world: World, command: SpawnCommand): void {
   faction.hasSpawned = true;
   faction.troops = BALANCE.spawn.troops;
   faction.workers = BALANCE.spawn.workers;
+  faction.solars = BALANCE.spawn.solars;
 }

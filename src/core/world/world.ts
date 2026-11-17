@@ -50,8 +50,13 @@ export interface Faction {
   hasSpawned: boolean;
   troops: number;
   workers: number;
+  /** Solars (☉), the only currency. */
   solars: number;
+  /** Fractional Solars carried between ticks, in thousandths (0–999). */
+  solarsMilli: number;
   tileCount: number;
+  /** Tiles owned on each grid (index = GridId); kept in sync by setOwner. */
+  readonly gridTiles: number[];
   /**
    * Every tile the faction owns, as TileRefs, in no particular order (but a
    * deterministic one). Lets AI and attacks look at a faction's land without
@@ -88,7 +93,7 @@ export interface Attack {
   readonly frontier: FrontierHeap;
 }
 
-export type StructureKind = "spaceport";
+export type StructureKind = "spaceport" | "habitat";
 
 /** A building on a map. Captured along with its tile. */
 export interface Structure {
@@ -99,9 +104,11 @@ export interface Structure {
   readonly tile: number;
   /** Ticks until it works; 0 = finished. */
   buildTicksLeft: number;
+  /** Spaceports: the tick its next Freighter leaves (-1 until finished). */
+  nextTradeTick: number;
 }
 
-export type ShipKind = "troopLander";
+export type ShipKind = "troopLander" | "freighter";
 
 /** A spacecraft in flight. Its whole route is planned at launch. */
 export interface Ship {
@@ -113,6 +120,8 @@ export interface Ship {
   readonly fromTile: number;
   readonly toGrid: GridId;
   readonly toTile: number;
+  /** Freighters: the Spaceport they deliver to (-1 for landers). */
+  readonly toStructure: number;
   readonly launchTick: number;
   readonly arriveTick: number;
   /** Route through space (empty for a hop within one map). */
@@ -244,7 +253,9 @@ export function addFaction(world: World, name: string, kind: FactionKind): Facti
     troops: 0,
     workers: 0,
     solars: 0,
+    solarsMilli: 0,
     tileCount: 0,
+    gridTiles: world.grids.map(() => 0),
     tiles: [],
     troopRatioPct: BALANCE.population.defaultTroopRatioPct,
   };

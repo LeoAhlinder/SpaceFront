@@ -5,6 +5,7 @@ import type { FactionId, GridId } from "../ids";
 import { NEUTRAL } from "../ids";
 import type { System } from "../tick";
 import { FrontierHeap } from "../world/frontierHeap";
+import { gridModifier } from "../world/modifiers";
 import { setOwner } from "../world/territory";
 import { refGrid, refTile } from "../world/tileRef";
 import type { Attack, World } from "../world/world";
@@ -148,6 +149,7 @@ function tileCost(world: World, grid: TileGrid, attack: Attack, tile: number): n
     const defender = world.factions[attack.target]!;
     const density = Math.floor(defender.troops / Math.max(1, defender.tileCount));
     base = A.enemyBaseCost + Math.floor((density * A.enemyDensityPct) / 100);
+    base = Math.floor((base * gridModifier(world, grid.id, "defensePct")) / 100);
   }
   return Math.max(1, Math.floor((base * terrainPct) / 100));
 }

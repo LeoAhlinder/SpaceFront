@@ -20,6 +20,18 @@ export interface TerrainProfile {
   readonly islands?: boolean;
 }
 
+/** Percent multipliers for a world's land (100 = normal; omitted = 100). */
+export interface WorldModifiers {
+  /** Worker income from land here. */
+  readonly incomePct?: number;
+  /** Population growth from land here. */
+  readonly growthPct?: number;
+  /** Cost for attackers to take enemy land here. */
+  readonly defensePct?: number;
+  /** Cost of structures built here. */
+  readonly buildCostPct?: number;
+}
+
 export interface BodyDef {
   readonly id: string;
   readonly name: string;
@@ -36,6 +48,8 @@ export interface BodyDef {
   readonly radius: number;
   /** Ships must keep at least this far from the center (Sun's heat zone, gas giants). 0 = none. */
   readonly avoidRadius: number;
+  /** Gameplay modifiers in percent (100 = normal) for land on this body. */
+  readonly modifiers?: WorldModifiers;
   /** Landable bodies have a flat map. */
   readonly map?: {
     readonly width: number;
@@ -74,6 +88,7 @@ export const SOLAR_SYSTEM: readonly BodyDef[] = [
     phase: 300,
     radius: 45,
     avoidRadius: 0,
+    modifiers: { growthPct: 80, incomePct: 110 },
     map: { width: 240, height: 120, mapId: "mercury", terrain: rock(8, 30, 15) },
   },
   {
@@ -85,6 +100,7 @@ export const SOLAR_SYSTEM: readonly BodyDef[] = [
     phase: 1500,
     radius: 65,
     avoidRadius: 0,
+    modifiers: { growthPct: 75, defensePct: 140 },
     map: { width: 480, height: 240, mapId: "venus", terrain: rock(5, 35, 12) },
   },
   {
@@ -96,6 +112,7 @@ export const SOLAR_SYSTEM: readonly BodyDef[] = [
     phase: 0,
     radius: 70,
     avoidRadius: 0,
+    modifiers: { growthPct: 120 },
     map: { width: 800, height: 386, mapId: "earth" },
   },
   {
@@ -108,6 +125,7 @@ export const SOLAR_SYSTEM: readonly BodyDef[] = [
     phase: 1000,
     radius: 25,
     avoidRadius: 0,
+    modifiers: { buildCostPct: 70 },
     map: { width: 200, height: 100, mapId: "moon", terrain: rock(0, 30, 10) },
   },
   {
@@ -130,6 +148,7 @@ export const SOLAR_SYSTEM: readonly BodyDef[] = [
     phase: 3600,
     radius: 60,
     avoidRadius: 0,
+    modifiers: { incomePct: 125, growthPct: 85 },
     map: {
       width: 360,
       height: 180,
@@ -157,6 +176,7 @@ export const SOLAR_SYSTEM: readonly BodyDef[] = [
     phase: 0,
     radius: 22,
     avoidRadius: 0,
+    modifiers: { incomePct: 150, growthPct: 85 },
     map: { width: 150, height: 75, mapId: "io", terrain: rock(0, 30, 20) },
   },
   {
@@ -169,6 +189,7 @@ export const SOLAR_SYSTEM: readonly BodyDef[] = [
     phase: 1000,
     radius: 20,
     avoidRadius: 0,
+    modifiers: { growthPct: 130 },
     map: { width: 140, height: 70, mapId: "europa", terrain: rock(0, 10, 5, 60) },
   },
   {
@@ -215,6 +236,7 @@ export const SOLAR_SYSTEM: readonly BodyDef[] = [
     phase: 500,
     radius: 28,
     avoidRadius: 0,
+    modifiers: { incomePct: 115, growthPct: 110 },
     map: { width: 200, height: 100, mapId: "titan", terrain: rock(15, 20, 8, 10) },
   },
   {
@@ -259,6 +281,7 @@ export const SOLAR_SYSTEM: readonly BodyDef[] = [
     phase: 1500,
     radius: 16,
     avoidRadius: 0,
+    modifiers: { incomePct: 130, growthPct: 80 },
     map: { width: 100, height: 50, mapId: "triton", terrain: rock(0, 15, 10, 50) },
   },
 ];
@@ -270,4 +293,25 @@ export function bodyById(id: string): BodyDef {
   const body = SOLAR_SYSTEM.find((b) => b.id === id);
   if (!body) throw new Error(`Unknown body "${id}"`);
   return body;
+}
+
+/** A modifier of a body (100 when not set). */
+export function modifierOf(body: BodyDef | undefined, key: keyof WorldModifiers): number {
+  return body?.modifiers?.[key] ?? 100;
+}
+
+export type StructureCostKind = "spaceport" | "habitat";
+
+/**
+ * Solars to build a structure: the base cost, plus costStepPct percent for
+ * each one of that kind the faction already owns, times the world's
+ * buildCostPct. Shared by the simulation and the client's build menu.
+ */
+export function structureCost(
+  base: number,
+  stepPct: number,
+  owned: number,
+  worldPct: number,
+): number {
+  return Math.floor((((base * (100 + owned * stepPct)) / 100) * worldPct) / 100);
 }

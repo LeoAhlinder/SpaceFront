@@ -5,7 +5,7 @@ import type { MatchInit, WorkerMessage } from "../../shared/messages";
 import { factionColor } from "../render/colors";
 
 /** Must match core's FACTION_STATS_STRIDE (client can't import core values). */
-const STATS_STRIDE = 5;
+const STATS_STRIDE = 6;
 const LEADERBOARD_SIZE = 10;
 /** Alerts disappear after this many ticks. */
 const ALERT_TICKS = 120;
@@ -15,7 +15,8 @@ const OWNABLE_MIN = 2;
 export type Phase = "menu" | "loading" | "playing" | "ended";
 export type ViewState =
   { readonly kind: "system" } | { readonly kind: "planet"; readonly grid: number };
-export type Mode = "none" | "build" | "launch";
+/** What a click on a map does besides spawning/attacking: build something, or launch. */
+export type Mode = "none" | "spaceport" | "habitat" | "launch";
 
 export interface FactionView {
   readonly id: number;
@@ -26,6 +27,7 @@ export interface FactionView {
   troops: number;
   workers: number;
   tileCount: number;
+  solars: number;
 }
 
 export interface Alert {
@@ -104,7 +106,15 @@ function applyInit(init: MatchInit): void {
   view.factions = new Map(
     init.factions.map((f) => [
       f.id,
-      { ...f, color: factionColor(f.id, f.kind), alive: true, troops: 0, workers: 0, tileCount: 0 },
+      {
+        ...f,
+        color: factionColor(f.id, f.kind),
+        alive: true,
+        troops: 0,
+        workers: 0,
+        tileCount: 0,
+        solars: 0,
+      },
     ]),
   );
   ui.spawnPhaseTicks.value = init.spawnPhaseTicks;
@@ -140,6 +150,7 @@ function applyDelta(delta: TickDelta): void {
     f.troops = stats[o + 2]!;
     f.workers = stats[o + 3]!;
     f.tileCount = stats[o + 4]!;
+    f.solars = stats[o + 5]!;
   }
   for (const s of delta.structures) view.structures.set(s.id, s);
   if (delta.structures.length > 0) {
@@ -169,7 +180,7 @@ function applyDelta(delta: TickDelta): void {
 /** Warns the player about enemy landers heading for a world where they hold land. */
 function alertForLaunch(ship: ShipView, tick: number): void {
   const me = view.init?.playerId;
-  if (me === undefined || ship.owner === me) return;
+  if (me === undefined || ship.owner === me || ship.kind !== "troopLander") return;
   if ((view.ownerCounts[ship.toGrid]?.get(me) ?? 0) === 0) return;
   const enemy = view.factions.get(ship.owner)?.name ?? "Enemy";
   const world = worldName(ship.toGrid);
@@ -189,6 +200,14 @@ export function dismissAlert(id: number): void {
 export function worldName(grid: number): string {
   const bodyId = view.init?.grids[grid]?.bodyId;
   return bodyId ? bodyById(bodyId).name : `World ${grid}`;
+}
+
+/** Structures of a kind the player owns (finished or not); build costs rise with this. */
+export function ownedCount(kind: string): number {
+  const me = view.init?.playerId;
+  let n = 0;
+  for (const s of view.structures.values()) if (s.owner === me && s.kind === kind) n++;
+  return n;
 }
 
 /** The faction owning most of a grid's land, and its share of it (0–1). */

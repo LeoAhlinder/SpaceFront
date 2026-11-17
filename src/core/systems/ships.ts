@@ -6,6 +6,7 @@ import type { System } from "../tick";
 import { setOwner } from "../world/territory";
 import type { Ship, World } from "../world/world";
 import { beginAttack, extendFrontiers } from "./attack";
+import { deliver } from "./trade";
 
 const S = BALANCE.ships;
 
@@ -45,6 +46,7 @@ export function applyLaunch(world: World, command: LaunchCommand): string | null
     fromTile: port.tile,
     toGrid: command.toGrid,
     toTile: command.toTile,
+    toStructure: -1,
     launchTick: world.tick,
     arriveTick,
     waypoints,
@@ -64,7 +66,8 @@ export const shipSystem: System = (world, ctx) => {
       flying.push(ship);
       continue;
     }
-    land(world, ship);
+    if (ship.kind === "freighter") deliver(world, ship);
+    else land(world, ship);
     world.log?.shipsLanded.push(ship.id);
   }
   world.ships = flying;

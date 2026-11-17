@@ -95,6 +95,7 @@ describe("deltas", () => {
       f2.troops,
       f2.workers,
       f2.tileCount,
+      f2.solars,
     ]);
     expect(winner).toBe(-1);
   });

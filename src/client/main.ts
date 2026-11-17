@@ -45,7 +45,8 @@ async function main(): Promise<void> {
   attachKeys({
     cancel: actions.cancel,
     toggleSystemView: actions.toggleSystemView,
-    buildSpaceport: () => actions.toggleMode("build"),
+    buildSpaceport: () => actions.toggleMode("spaceport"),
+    buildHabitat: () => actions.toggleMode("habitat"),
     launchLander: () => actions.toggleMode("launch"),
   });
 

@@ -96,16 +96,21 @@ export class SystemScene {
       const f = (t - ship.launchTick) / Math.max(1, ship.arriveTick - ship.launchTick);
       const p = alongPath(ship.waypoints, f);
       const color = view.factions.get(ship.owner)?.color ?? 0xffffff;
-      if (ship.owner === view.init?.playerId) {
-        // Show the player's own route.
+      if (ship.owner === view.init?.playerId && ship.kind === "troopLander") {
+        // Show the player's own lander routes.
         const end = ship.waypoints.length - 2;
         g.moveTo(p.x, p.y)
           .lineTo(ship.waypoints[end]!, ship.waypoints[end + 1]!)
           .stroke({ width: px, color, alpha: 0.35 });
       }
-      g.circle(p.x, p.y, 4 * px)
-        .fill(color)
-        .stroke({ width: px, color: 0x000000 });
+      if (ship.kind === "freighter") {
+        // Freighters: small dim squares, so landers stand out.
+        g.rect(p.x - 2 * px, p.y - 2 * px, 4 * px, 4 * px).fill({ color, alpha: 0.7 });
+      } else {
+        g.circle(p.x, p.y, 4 * px)
+          .fill(color)
+          .stroke({ width: px, color: 0x000000 });
+      }
     }
   }
 

@@ -104,11 +104,12 @@ This keeps the simulation portable to a server and stops rendering code from rea
   1. `applyCommands`: validate and apply this tick's commands
   2. (no orbit system: body positions are computed from the tick number on demand, see §4.6)
   3. `populationSystem`: population growth, troop/worker split
-  4. `incomeSystem`: Solars from workers, trade, siphons
+  4. `incomeSystem`: Solars from workers (× world income modifiers) and Habitats; siphons later
   5. `attackSystem`: territory spreading
-  6. `shipSystem`: ship movement, arrivals, landings
+  6. `shipSystem`: arrivals: landers land and attack, Freighters deliver trade income
   7. `combatSystem`: Warships, orbital defense, weapons
-  8. `constructionSystem`: build timers, structure effects
+  8. `constructionSystem`: build timers; a finished Spaceport schedules its first Freighter
+     8b. `tradeSystem`: Spaceports send Freighters to other factions' Spaceports; both owners are paid on arrival (in `shipSystem`)
   9. `coronaSystem`: heat drain, decay of territory cut off from a Sun Base
   10. `aiSystem`: bots and nations queue commands for **next** tick (only every N ticks, staggered per faction)
   11. `victorySystem`: win/loss checks

@@ -29,6 +29,8 @@ function twoPlanets(seed = 1): World {
   addFaction(world, "P1", "player");
   addFaction(world, "P2", "bot");
   run(world, spawn(P1, EARTH, 20, 20), spawn(P2, MARS, 10, 10));
+  // Plenty of Solars, so these tests are about ships, not the economy.
+  for (const f of world.factions) f.solars = 1_000_000;
   return world;
 }
 
@@ -68,7 +70,7 @@ function reasons(world: World, ...commands: Command[]): string[] {
 /** Builds a Spaceport at (20, 20) on Earth for P1 and waits until it's finished. */
 function withPort(world: World): number {
   expect(reasons(world, build(world, EARTH, 20, 20))).toEqual([]);
-  runTicks(world, BALANCE.structures.spaceportBuildTicks);
+  runTicks(world, BALANCE.structures.spaceport.buildTicks);
   return world.structureAt[EARTH]![at(world, EARTH, 20, 20)]!;
 }
 
@@ -79,7 +81,7 @@ describe("Spaceport", () => {
     const port = world.structures[0]!;
     expect(port).toMatchObject({ kind: "spaceport", owner: P1, grid: EARTH });
     expect(port.buildTicksLeft).toBeGreaterThan(0);
-    runTicks(world, BALANCE.structures.spaceportBuildTicks);
+    runTicks(world, BALANCE.structures.spaceport.buildTicks);
     expect(port.buildTicksLeft).toBe(0);
   });
 
@@ -181,6 +183,7 @@ describe("Troop Lander", () => {
     });
     addFaction(world, "P1", "player");
     run(world, spawn(P1, EARTH, 20, 20));
+    world.factions[P1]!.solars = 1_000_000;
     const portId = withPort(world);
     expect(reasons(world, launch(portId, MARS, 5))).toEqual(["no route"]);
     expect(world.grids[MARS]!.owner[5]).toBe(NEUTRAL);

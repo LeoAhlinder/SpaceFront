@@ -74,7 +74,7 @@ You, at first. Later, online human players.
 ### Bots ("Drifters")
 
 - Spawn as many small factions on **every** body, filling the map like the dumb bots in the genre.
-- They are intentionally dumb: they expand randomly, never build spacecraft, rarely attack anyone bigger, and never ally.
+- They are intentionally dumb: they expand randomly, never launch spacecraft, rarely attack anyone bigger, and never ally. They do build a Spaceport and some Habitats, so there is always someone to trade with.
 - They act as early-game food and padding between the stronger factions.
 
 ### Nations

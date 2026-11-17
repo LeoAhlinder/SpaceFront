@@ -60,7 +60,7 @@ export function createActions(bridge: SimBridge): Actions {
     },
 
     /**
-     * A click on a map. Build mode: place a Spaceport. Launch mode: send a
+     * A click on a map. Build mode: place a Spaceport or Habitat. Launch mode: send a
      * Troop Lander there. Otherwise: spawn if not spawned yet, else attack.
      */
     clickTile: (hit) => {
@@ -71,8 +71,8 @@ export function createActions(bridge: SimBridge): Actions {
       const mode = ui.mode.value;
       if (me.tileCount === 0) {
         send({ type: "spawn", faction, grid, tile: hit.tile });
-      } else if (mode === "build") {
-        send({ type: "build", faction, kind: "spaceport", grid, tile: hit.tile });
+      } else if (mode === "spaceport" || mode === "habitat") {
+        send({ type: "build", faction, kind: mode, grid, tile: hit.tile });
         ui.mode.value = "none";
       } else if (mode === "launch") {
         const from = portFor(hit.grid);
