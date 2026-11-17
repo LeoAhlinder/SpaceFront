@@ -9,7 +9,7 @@ import { buildCost, tooCloseToStructure } from "../systems/structures";
 import type { System } from "../tick";
 import { refGrid, refTile } from "../world/tileRef";
 import type { BotState, Faction, World } from "../world/world";
-import { addFaction, inSpawnPhase } from "../world/world";
+import { addFaction, gridOf, inSpawnPhase, isCorona, troopPool } from "../world/world";
 
 const B = BALANCE.bot;
 
@@ -52,13 +52,19 @@ export const aiSystem: System = (world, ctx) => {
 
 /**
  * Sometimes builds on a random own tile: a first Spaceport (which starts
- * trade), or a Habitat. Never anything else, and never a second Spaceport.
+ * trade), or a Habitat; on a Corona tile, a Solar Siphon. Never a second Spaceport.
  */
 function maybeBuild(world: World, bot: BotState, faction: Faction): Command | null {
   const ref = faction.tiles[bot.rng.nextInt(faction.tiles.length)]!;
   const grid = refGrid(ref);
   const tile = refTile(ref);
   if (tooCloseToStructure(world, grid, tile)) return null;
+  if (isCorona(world, grid)) {
+    const kind = "solarSiphon";
+    if (!bot.rng.chance(B.buildSiphonChancePct, 100)) return null;
+    if (faction.solars < buildCost(world, bot.faction, kind, grid)) return null;
+    return { type: "build", faction: bot.faction, kind, grid, tile };
+  }
   const hasPort = world.structures.some((s) => s.owner === bot.faction && s.kind === "spaceport");
   for (const kind of ["spaceport", "habitat"] as const) {
     if (kind === "spaceport" && hasPort) continue;
@@ -67,7 +73,40 @@ function maybeBuild(world: World, bot: BotState, faction: Faction): Command | nu
     if (faction.solars < buildCost(world, bot.faction, kind, grid)) continue;
     return { type: "build", faction: bot.faction, kind, grid, tile };
   }
-  return null;
+  return maybeSendSunBase(world, bot, faction);
+}
+
+/**
+ * Sometimes sends a Sun Base ship from its finished Spaceport to a random
+ * empty Corona tile, if it has no Sun Base yet and can afford one.
+ */
+function maybeSendSunBase(world: World, bot: BotState, faction: Faction): Command | null {
+  const corona = world.corona;
+  if (!corona || !bot.rng.chance(B.sunBaseChancePct, 100)) return null;
+  let port = -1;
+  for (const s of world.structures) {
+    if (s.owner !== bot.faction) continue;
+    if (s.kind === "sunBase") return null;
+    if (s.kind === "spaceport" && s.buildTicksLeft === 0 && port < 0) port = s.id;
+  }
+  for (const ship of world.ships) {
+    if (ship.owner === bot.faction && ship.kind === "sunBaseShip") return null;
+  }
+  if (port < 0 || faction.solars < buildCost(world, bot.faction, "sunBase", corona.id)) {
+    return null;
+  }
+  const tile = bot.rng.nextInt(corona.size);
+  if (corona.owner[tile] !== NEUTRAL || tooCloseToStructure(world, corona.id, tile)) return null;
+  const ratioPct = bot.rng.nextRange(B.expandRatioMinPct, B.expandRatioMaxPct);
+  return {
+    type: "launch",
+    faction: bot.faction,
+    kind: "sunBaseShip",
+    from: port,
+    toGrid: corona.id,
+    toTile: tile,
+    ratioPct,
+  };
 }
 
 /** Picks a random free, ownable tile on the bot's home body (or a random body). */
@@ -101,7 +140,9 @@ function decide(world: World, bot: BotState, faction: Faction): Command | null {
 
   for (let s = 0; s < B.sampleTiles; s++) {
     const ref = faction.tiles[bot.rng.nextInt(faction.tiles.length)]!;
-    const grid = world.grids[refGrid(ref)]!;
+    const grid = gridOf(world, refGrid(ref))!;
+    // No troops on this front (the Corona has its own pool): look elsewhere.
+    if (troopPool(world, faction, grid.id) < B.minCoronaTroops) continue;
     const n = grid.neighbors(refTile(ref), scratch);
     for (let i = 0; i < n; i++) {
       const tile = scratch[i]!;

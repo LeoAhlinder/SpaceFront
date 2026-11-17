@@ -104,13 +104,13 @@ This keeps the simulation portable to a server and stops rendering code from rea
   1. `applyCommands`: validate and apply this tick's commands
   2. (no orbit system: body positions are computed from the tick number on demand, see §4.6)
   3. `populationSystem`: population growth, troop/worker split
-  4. `incomeSystem`: Solars from workers (× world income modifiers) and Habitats; siphons later
+  4. `incomeSystem`: Solars from workers (× world income modifiers), Habitats and Solar Siphons
   5. `attackSystem`: territory spreading
-  6. `shipSystem`: arrivals: landers land and attack, Freighters deliver trade income
+  6. `shipSystem`: arrivals: landers land and attack, Freighters deliver trade income, Sun Base ships found Sun Bases
   7. `combatSystem`: Warships, orbital defense, weapons
   8. `constructionSystem`: build timers; a finished Spaceport schedules its first Freighter
      8b. `tradeSystem`: Spaceports send Freighters to other factions' Spaceports; both owners are paid on arrival (in `shipSystem`)
-  9. `coronaSystem`: heat drain, decay of territory cut off from a Sun Base
+  9. `coronaSystem`: Sun Base training, heat drain, decay of territory cut off from a Sun Base
   10. `aiSystem`: bots and nations queue commands for **next** tick (only every N ticks, staggered per faction)
   11. `victorySystem`: win/loss checks
 
@@ -135,8 +135,8 @@ interface World {
   seed: number;
   rng: Rng;
   config: MatchConfig; // difficulty, map, player count
-  bodies: Body[]; // planets, moons, asteroids
-  corona: Corona; // ring around the Sun
+  grids: RectGrid[]; // one flat map per landable body
+  corona: PolarGrid | null; // ring around the Sun; its GridId is grids.length
   factions: Faction[]; // index 0 = neutral; each keeps a list of its tiles
   tileSlots: Int32Array[]; // per grid: a tile's index in its owner's tile list
   bots: BotState[]; // per-bot RNG stream and next decision tick
@@ -149,6 +149,8 @@ interface World {
 ```
 
 - **Faction ids are `uint16`.** 0 = neutral/unowned.
+- **The Corona** is not in `world.grids`: it is `world.corona` (when `MatchConfig.corona` is set), with the next GridId after the bodies. Per-grid arrays (`tileSlots`, `structureAt`, `Faction.gridTiles`) have one entry more than `grids`. Look grids up with `gridOf(world, id)`; `isCorona(world, id)` tells them apart.
+- **Two troop pools per faction:** `troops` for the bodies and `coronaTroops` for the Corona (troops don't grow there). `troopPool`/`addTroops` pick the pool by grid: attacks, landings and launches use the pool of the grid they happen on. `landTiles(world, f)` (tiles on bodies) drives the population cap, income modifiers, the win condition and the delta's tile count.
 - **Tile lists:** every faction keeps `tiles`, the TileRefs (`grid × 2^24 + tile`) it owns, kept in sync by `setOwner` with O(1) swap-removal through `tileSlots`. AI and attacks look at a faction's own land through this list instead of scanning whole grids.
 - **Ships and structures** are plain object arrays for now (dozens to hundreds of them). If profiling shows thousands of ships cost too much, switch to struct-of-arrays with typed arrays and a free list.
 
@@ -172,6 +174,8 @@ interface TileGrid {
 | `RectGrid`  | Planets, moons, asteroids | A flat rectangular map, like a world map in a strategy game. No wrap-around at the edges. |
 | `PolarGrid` | The Corona                | `rings × sectors`. Sectors wrap around. Each ring belongs to a band (inner/middle/outer). |
 
+`PolarGrid` tile = `ring × sectors + sector`, ring 0 innermost. Neighbors: inward, counter-clockwise, clockwise, outward. In space, ring _r_ lies evenly between `BALANCE.corona.innerRadius` (just outside the Sun's heat zone) and `outerRadius` (inside Mercury's orbit); sector _s_ is centered on angle (_s_ + ½) / sectors of a turn (`coronaTilePoint`). The Corona doesn't turn.
+
 A tile is identified by `(gridId, index)`. Code in hot loops only works with plain `number` indexes.
 
 ### 4.5 Territory spreading (attacks)
@@ -188,7 +192,9 @@ A tile is identified by `(gridId, index)`. Code in hot loops only works with pla
 - When launched, a ship gets a **precomputed route** (`planFlight`): it aims at the target's position at arrival (refined a few times, since the arrival time depends on the route) and gets detour waypoints around the Sun's heat zone and gas giants (`avoidRadius`). The ship only stores its route and `arriveTick`; the shipSystem lands it on that tick. The client animates it along the route on its own.
 - A launch to a tile on the **same map** is a hop (e.g. across an ocean) with no space route; its duration comes from the tile distance.
 - **Landing:** on own land the troops join the faction. Otherwise the lander pays `landingCost` troops to take the tile, then starts (or joins) an attack on the tile's previous owner from that beachhead (`beginAttack`).
-- **Structures** (`systems/structures.ts`): built on own land with a minimum spacing, finished after a build timer by the constructionSystem, and captured along with their tile (`setOwner` checks `structureAt`). Only the Spaceport exists so far; it has no cost until Solars arrive (M2).
+- **Flights to and from the Corona** aim at the tile's fixed point (`planFlight` takes a body id or a point as either end). A trip within the Corona follows the ring around the Sun (`coronaArc`) instead of crossing it. `planRoute` picks the right kind of trip for landers, Sun Base ships and Freighters.
+- **Structures** (`systems/structures.ts`): built on own land with a minimum spacing, paid in Solars, finished after a build timer by the constructionSystem, and captured along with their tile (`setOwner` checks `structureAt`). Spaceports and Habitats go on bodies, Solar Siphons only on the builder's own Corona tiles. A **Sun Base** is not built: a Sun Base ship (paid at launch) flies to an empty Corona tile and becomes a finished base on arrival (`foundSunBase`), claiming the neutral tiles around it; it is lost if the tile was taken meanwhile. Sun Bases count as Spaceports (`isPort`): they launch ships (with Corona troops) and trade.
+- **The Corona** (`systems/corona.ts`): every `BALANCE.corona.intervalTicks` the coronaSystem scans the (small, fixed) Corona grid once: Sun Bases train Corona troops up to a cap, a flood fill from every Sun Base finds the tiles still connected to one of their owner's bases (the rest decay to neutral a few per interval), and heat drains Corona troops by how many of a faction's Corona tiles lie in the inner and middle bands. Siphon income (by band, best band first, with diminishing returns per siphon) is paid by the incomeSystem.
 - Combat checks use a **spatial hash** (grid buckets in space) so nearby ships are found without comparing every pair.
 
 ### 4.7 Commands
@@ -254,7 +260,7 @@ type Command =
 After each tick, the host calls `drainDelta(world)` (`core/delta`) to collect what changed:
 
 - Tiles whose owner changed: `(grid, tile, owner)` triples in a `Uint32Array`. `setOwner` records changed tiles in `world.changes`, but only after the host calls `trackChanges(world)`; tests and servers that don't listen record nothing. `world.changes` is not game state and is never hashed.
-- Faction stats: `id, alive, troops, workers, tileCount` per faction in a `Float64Array` (Solars come with M2)
+- Faction stats: `id, alive, troops, workers, land tiles, solars, Corona troops, Corona tiles` per faction in a `Float64Array`
 - The winner, or -1
 - Later: ships spawned, moved or destroyed, structures built or destroyed, and events for the UI ("alliance requested", "nuke incoming", "siphon captured")
 
@@ -263,7 +269,7 @@ Deltas are the only thing that leaves the worker each tick.
 ### 4.10 Match flow
 
 - **Spawn phase:** `MatchConfig.spawnPhaseTicks` (100 ticks = 10 s in real matches, 0 in tests). During it, attacks are rejected and population doesn't grow, so everyone gets to pick a spot first.
-- **Victory** (`victorySystem`, last each tick): the first faction to own `winLandPct` (80%) of all ownable land wins, or the last faction standing. Factions that haven't spawned yet still count as in the game. Core keeps simulating after a win; the host decides to stop.
+- **Victory** (`victorySystem`, last each tick): the first faction to own `winLandPct` (80%) of all ownable land on bodies wins (Corona tiles don't count, and `world.ownableTiles` excludes them), or the last faction standing. Factions that haven't spawned yet still count as in the game. Core keeps simulating after a win; the host decides to stop.
 
 ---
 
@@ -272,7 +278,7 @@ Deltas are the only thing that leaves the worker each tick.
 - `src/shared/messages.ts` defines every message as a discriminated union.
 - **Client → worker:** `start(setup)` (seed, map, bot count, player name), `command(cmd)`, `pause`. Later: `setSpeed`, `save`, `load`.
 - **Worker → client:**
-  - `init`: static data (player id, spawn phase length, ownable land and win share, grid terrain and owners, faction names and kinds). Sent once per match. The client picks faction colors itself.
+  - `init`: static data (player id, spawn phase length, ownable land and win share, grid terrain and owners, the Corona's shape and owners, faction names and kinds). Sent once per match. The client picks faction colors itself.
   - `tick`: the delta. Sent every tick. Its typed arrays are **transferred**, not copied.
   - `error`: the match failed to start
   - Later: `event` messages for the UI, `saveData`
@@ -296,7 +302,7 @@ Deltas are the only thing that leaves the worker each tick.
   6. Ships (sprites; batched; shown as icons when zoomed out)
   7. Effects (explosions, beams, weapon trails)
   8. Selection, hover and target markers
-- **Corona:** its `PolarGrid` texture is drawn onto a ring mesh, so polar tiles appear as curved segments.
+- **Corona** (`render/coronaLayer.ts`): the `PolarGrid` is drawn into one square texture around the Sun. A lookup made once maps each pixel to its tile (and each tile to its pixels), so polar tiles appear as curved segments and a changed tile only repaints its own pixels. The Corona is played in the system view: a click that misses every body icon hits the Corona tile under it (`coronaTileAt`), and Sun Bases and siphons are drawn on their tiles there.
 - **Interpolation:** the renderer runs at the display frame rate. It moves body and ship positions smoothly between the last two ticks.
 - **Level of detail:** in the system view, ships are grouped into counters when they overlap.
 - **Camera:** each view has its own camera (pan, zoom toward the cursor). Zooming far out of a planet view returns to the system view.

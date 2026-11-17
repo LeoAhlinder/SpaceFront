@@ -29,8 +29,11 @@ async function main(): Promise<void> {
     () => renderer.camera,
     (x, y) => {
       if (ui.view.value.kind === "system") {
+        // A world's icon opens its map; the Corona is played right here.
         const grid = renderer.system.gridAt(x, y, renderer.now());
+        const corona = grid === null ? renderer.system.coronaTileAt(x, y) : null;
         if (grid !== null) actions.openPlanet(grid);
+        else if (corona) actions.clickTile(corona);
       } else {
         const hit = renderer.planet.tileAt(x, y);
         if (hit) actions.clickTile(hit);
@@ -48,6 +51,8 @@ async function main(): Promise<void> {
     buildSpaceport: () => actions.toggleMode("spaceport"),
     buildHabitat: () => actions.toggleMode("habitat"),
     launchLander: () => actions.toggleMode("launch"),
+    launchSunBase: () => actions.toggleMode("sunBase"),
+    buildSolarSiphon: () => actions.toggleMode("solarSiphon"),
   });
 
   render(h(App, { actions }), element("ui"));

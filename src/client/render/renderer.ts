@@ -44,6 +44,7 @@ export class GameRenderer {
 
   setMatch(init: MatchInit): void {
     this.planet.setMatch(init);
+    this.system.setMatch(init);
     this.system.fit(this.app.screen.width, this.app.screen.height);
     this.shown = null;
   }
@@ -66,6 +67,7 @@ export class GameRenderer {
     this.planet.container.visible = !inSystem;
     const t = this.now();
     this.planet.draw(t); // keeps every map's territory current even when hidden
+    this.system.updateCorona();
     if (inSystem) this.system.draw(t);
   }
 }

@@ -8,6 +8,8 @@ export const KEYMAP = {
   buildSpaceport: "b",
   buildHabitat: "h",
   launchLander: "l",
+  launchSunBase: "u",
+  buildSolarSiphon: "s",
 } as const;
 
 export type KeyAction = keyof typeof KEYMAP;

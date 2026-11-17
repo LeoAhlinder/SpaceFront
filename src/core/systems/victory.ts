@@ -1,10 +1,11 @@
 import { BALANCE } from "../../data/balance";
 import type { System } from "../tick";
-import { inSpawnPhase } from "../world/world";
+import { inSpawnPhase, landTiles } from "../world/world";
 
 /**
  * Declares a winner: the first faction to own BALANCE.match.winLandPct percent
- * of all ownable land, or the last faction standing. Core keeps simulating
+ * of all ownable land on bodies (the Corona doesn't count), or the last
+ * faction standing. Core keeps simulating
  * after a win; stopping the match is the host's decision.
  */
 export const victorySystem: System = (world) => {
@@ -14,7 +15,7 @@ export const victorySystem: System = (world) => {
   let last = null;
   for (const f of world.factions) {
     if (f.kind === "neutral" || !f.alive) continue;
-    if (f.tileCount * 100 >= world.ownableTiles * BALANCE.match.winLandPct) {
+    if (landTiles(world, f) * 100 >= world.ownableTiles * BALANCE.match.winLandPct) {
       world.winner = f.id;
       return;
     }

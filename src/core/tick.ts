@@ -2,6 +2,7 @@ import { aiSystem } from "./ai/bot";
 import { applyCommands } from "./commands/applyCommands";
 import type { Command } from "./commands/commands";
 import { attackSystem } from "./systems/attack";
+import { coronaSystem } from "./systems/corona";
 import { incomeSystem } from "./systems/income";
 import { populationSystem } from "./systems/population";
 import { shipSystem } from "./systems/ships";
@@ -28,7 +29,7 @@ export type System = (world: World, ctx: TickContext) => void;
 
 /**
  * The systems in the order they run each tick (ARCHITECTURE.md §4.1).
- * Still to come: combat (M4), corona (M2.5). Body positions are
+ * Still to come: combat (M4). Body positions are
  * computed from the tick (core/space), so there is no orbit system.
  */
 export const SYSTEMS: readonly System[] = [
@@ -39,6 +40,7 @@ export const SYSTEMS: readonly System[] = [
   shipSystem,
   constructionSystem,
   tradeSystem,
+  coronaSystem,
   aiSystem,
   victorySystem,
 ];

@@ -1,6 +1,7 @@
 import { BALANCE } from "../../data/balance";
 import type { BodyDef } from "../../data/bodies";
 import { SOLAR_SYSTEM } from "../../data/bodies";
+import type { PolarGrid } from "../grid/polarGrid";
 import { ANGLE_FULL, fxCos, fxSin } from "../math/trig";
 
 /** A point in space units (integers). The Sun is at (0, 0). */
@@ -33,6 +34,60 @@ function positionOf(body: BodyDef, tick: number): Point {
   };
 }
 
+/**
+ * Where one end of a flight is: a body (by id, moving along its orbit) or a
+ * fixed point in space (a Corona tile).
+ */
+export type Endpoint = string | Point;
+
+function endpointAt(end: Endpoint, tick: number): Point {
+  return typeof end === "string" ? bodyPosition(end, tick) : end;
+}
+
+/**
+ * The center of a Corona tile in space. Ring r spans BALANCE.corona radii
+ * evenly; sector s is centered on angle (s + ½) turns / sectors, measured
+ * like body orbits (from +x toward +y). The Corona doesn't turn.
+ */
+export function coronaTilePoint(grid: PolarGrid, tile: number): Point {
+  const C = BALANCE.corona;
+  const ring = grid.ring(tile);
+  const sector = grid.sector(tile);
+  const radius =
+    C.innerRadius +
+    Math.floor(((2 * ring + 1) * (C.outerRadius - C.innerRadius)) / (2 * grid.rings));
+  const angle = Math.floor(((2 * sector + 1) * ANGLE_FULL) / (2 * grid.sectors));
+  return {
+    x: Math.floor((radius * fxCos(angle)) / 65536),
+    y: Math.floor((radius * fxSin(angle)) / 65536),
+  };
+}
+
+/** Waypoints per flight that follows the Corona around the Sun. */
+const ARC_STEPS = 12;
+
+/**
+ * A route between two Corona tiles that follows the ring the short way
+ * around, instead of cutting through the Sun's heat zone.
+ */
+export function coronaArc(grid: PolarGrid, from: number, to: number): Point[] {
+  const s = grid.sectors;
+  const r0 = grid.ring(from);
+  const s0 = grid.sector(from);
+  let ds = grid.sector(to) - s0;
+  if (ds > s / 2) ds -= s;
+  if (ds < -s / 2) ds += s;
+  const dr = grid.ring(to) - r0;
+  const points: Point[] = [coronaTilePoint(grid, from)];
+  for (let i = 1; i < ARC_STEPS; i++) {
+    const ring = r0 + Math.trunc((dr * i) / ARC_STEPS);
+    const sector = s0 + Math.trunc((ds * i) / ARC_STEPS);
+    points.push(coronaTilePoint(grid, grid.index(ring, sector)));
+  }
+  points.push(coronaTilePoint(grid, to));
+  return points;
+}
+
 /** floor(√n) for a non-negative integer, exact. */
 export function isqrt(n: number): number {
   let r = Math.floor(Math.sqrt(n));
@@ -61,27 +116,29 @@ export interface Flight {
 }
 
 /**
- * Plans a flight from body `fromId` to body `toId`, launched at `tick`. Aims
- * at where the target will be on arrival (refined a few times, since the
- * arrival time depends on the path) and bends around the Sun's heat zone and
- * the gas giants.
+ * Plans a flight from `from` to `to` (bodies or fixed points), launched at
+ * `tick`. Aims at where a target body will be on arrival (refined a few
+ * times, since the arrival time depends on the path) and bends around the
+ * Sun's heat zone and the gas giants.
  */
 export function planFlight(
-  fromId: string,
-  toId: string,
+  from: Endpoint,
+  to: Endpoint,
   tick: number,
   speed: number = BALANCE.ships.landerSpeed,
 ): Flight {
-  const start = bodyPosition(fromId, tick);
+  const start = endpointAt(from, tick);
+  const ends: string[] = [];
+  for (const e of [from, to]) if (typeof e === "string") ends.push(e);
   let arrive = tick + BALANCE.ships.minFlightTicks;
   for (let i = 0; i < 4; i++) {
-    const end = bodyPosition(toId, arrive);
-    const route = avoidObstacles(start, end, Math.floor((tick + arrive) / 2), [fromId, toId]);
+    const end = endpointAt(to, arrive);
+    const route = avoidObstacles(start, end, Math.floor((tick + arrive) / 2), ends);
     arrive = tick + Math.max(BALANCE.ships.minFlightTicks, Math.ceil(pathLength(route) / speed));
   }
   // Final aim at the settled arrival time.
-  const end = bodyPosition(toId, arrive);
-  const waypoints = avoidObstacles(start, end, Math.floor((tick + arrive) / 2), [fromId, toId]);
+  const end = endpointAt(to, arrive);
+  const waypoints = avoidObstacles(start, end, Math.floor((tick + arrive) / 2), ends);
   return { waypoints, arriveTick: arrive };
 }
 

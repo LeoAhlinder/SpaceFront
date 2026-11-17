@@ -300,7 +300,7 @@ export function modifierOf(body: BodyDef | undefined, key: keyof WorldModifiers)
   return body?.modifiers?.[key] ?? 100;
 }
 
-export type StructureCostKind = "spaceport" | "habitat";
+export type StructureCostKind = "spaceport" | "habitat" | "sunBase" | "solarSiphon";
 
 /**
  * Solars to build a structure: the base cost, plus costStepPct percent for

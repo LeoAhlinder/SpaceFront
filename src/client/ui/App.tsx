@@ -101,21 +101,23 @@ function Actions({ actions }: { actions: Actions }) {
   const canLaunch = ui.readyPorts.value > 0;
   const v = ui.view.value;
   const worldPct = v.kind === "planet" ? modifierOf(worldBody(v.grid), "buildCostPct") : 100;
-  const costOf = (kind: "spaceport" | "habitat") =>
+  const costOf = (kind: BuildKind) =>
     structureCost(
       BALANCE.structures[kind].cost,
       BALANCE.structures.costStepPct,
       ownedCount(kind),
-      worldPct,
+      // The Corona has no world modifiers.
+      kind === "sunBase" || kind === "solarSiphon" ? 100 : worldPct,
     );
-  const buildButton = (kind: "spaceport" | "habitat", label: string, info: string) => {
+  const buildButton = (kind: BuildKind, label: string, info: string, needsPort = false) => {
     const cost = costOf(kind);
     const affordable = !!me && me.solars >= cost;
+    const blocked = needsPort && !canLaunch;
     return (
       <button
         class={`build ${mode === kind ? "active" : ""}`}
-        disabled={!spawned || !affordable}
-        title={info}
+        disabled={!spawned || !affordable || blocked}
+        title={blocked ? strings.needSpaceport : info}
         onClick={() => actions.toggleMode(kind)}
       >
         <span>{label}</span>
@@ -144,20 +146,35 @@ function Actions({ actions }: { actions: Actions }) {
         <span>{strings.launchLander(KEYMAP.launchLander.toUpperCase())}</span>
         <span class="cost">{ui.attackRatioPct.value}%</span>
       </button>
+      {buildButton(
+        "sunBase",
+        strings.launchSunBase(KEYMAP.launchSunBase.toUpperCase()),
+        strings.sunBaseInfo,
+        true,
+      )}
+      {buildButton(
+        "solarSiphon",
+        strings.buildSolarSiphon(KEYMAP.buildSolarSiphon.toUpperCase()),
+        strings.solarSiphonInfo,
+      )}
     </div>
   );
 }
 
+type BuildKind = "spaceport" | "habitat" | "sunBase" | "solarSiphon";
+
+const MODE_HINTS = {
+  spaceport: strings.buildHint,
+  habitat: strings.habitatHint,
+  launch: strings.launchHint,
+  sunBase: strings.sunBaseHint,
+  solarSiphon: strings.solarSiphonHint,
+} as const;
+
 function ModeBanner() {
   const mode = ui.mode.value;
   if (mode === "none") return null;
-  const text =
-    mode === "spaceport"
-      ? strings.buildHint
-      : mode === "habitat"
-        ? strings.habitatHint
-        : strings.launchHint;
-  return <div class="banner">{text}</div>;
+  return <div class="banner">{MODE_HINTS[mode]}</div>;
 }
 
 function Alerts({ actions }: { actions: Actions }) {
@@ -190,6 +207,12 @@ function StatsPanel({ me }: { me: FactionView }) {
         label={strings.land}
         value={`${formatCount(me.tileCount)} · ${strings.landGoal(landShare(me) * 100, goal)}`}
       />
+      {(me.coronaTiles > 0 || me.coronaTroops > 0) && (
+        <Stat
+          label={strings.corona}
+          value={strings.coronaStat(formatCount(me.coronaTiles), formatCount(me.coronaTroops))}
+        />
+      )}
     </div>
   );
 }

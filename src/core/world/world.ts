@@ -1,7 +1,9 @@
 import { BALANCE } from "../../data/balance";
 import { CommandQueue } from "../commands/commandQueue";
+import { PolarGrid } from "../grid/polarGrid";
 import { RectGrid } from "../grid/rectGrid";
 import { isOwnableTerrain } from "../grid/terrain";
+import type { TileGrid } from "../grid/tileGrid";
 import type { FactionId, GridId } from "../ids";
 import { factionId, gridId, MAX_FACTION_ID, NEUTRAL } from "../ids";
 import type { TerrainMap } from "../map/terrainMap";
@@ -38,6 +40,11 @@ export interface MatchConfig {
    * population growth. Default 0 (tests); real matches use BALANCE.match.
    */
   readonly spawnPhaseTicks?: number;
+  /**
+   * Adds the Corona around the Sun (a PolarGrid, sized by BALANCE.corona) as
+   * the grid after the last body. Default false (tests of single maps).
+   */
+  readonly corona?: boolean;
 }
 
 /** A player, bot or nation. All numbers are integers. */
@@ -50,6 +57,11 @@ export interface Faction {
   hasSpawned: boolean;
   troops: number;
   workers: number;
+  /**
+   * Troops in the Corona: a separate pool, since troops don't grow there. Fed
+   * by landers and Sun Bases, drained by heat, spent on Corona attacks.
+   */
+  coronaTroops: number;
   /** Solars (☉), the only currency. */
   solars: number;
   /** Fractional Solars carried between ticks, in thousandths (0–999). */
@@ -93,7 +105,7 @@ export interface Attack {
   readonly frontier: FrontierHeap;
 }
 
-export type StructureKind = "spaceport" | "habitat";
+export type StructureKind = "spaceport" | "habitat" | "sunBase" | "solarSiphon";
 
 /** A building on a map. Captured along with its tile. */
 export interface Structure {
@@ -104,11 +116,11 @@ export interface Structure {
   readonly tile: number;
   /** Ticks until it works; 0 = finished. */
   buildTicksLeft: number;
-  /** Spaceports: the tick its next Freighter leaves (-1 until finished). */
+  /** Spaceports and Sun Bases: the tick its next Freighter leaves (-1 until finished). */
   nextTradeTick: number;
 }
 
-export type ShipKind = "troopLander" | "freighter";
+export type ShipKind = "troopLander" | "freighter" | "sunBaseShip";
 
 /** A spacecraft in flight. Its whole route is planned at launch. */
 export interface Ship {
@@ -142,16 +154,21 @@ export interface ChangeLog {
 
 /**
  * The complete simulation state: the single source of truth (ARCHITECTURE.md §4.3).
- * Units, structures, the Corona and alliances are added by the milestones that
- * need them.
+ * Alliances and combat units are added by the milestones that need them.
  */
 export interface World {
   /** Number of ticks completed so far. */
   tick: number;
   readonly config: MatchConfig;
   readonly rng: Rng;
-  /** One grid per body, indexed by GridId. */
+  /** One grid per body, indexed by GridId. The Corona is not in here (see `corona`). */
   readonly grids: RectGrid[];
+  /**
+   * The Corona around the Sun, or null in matches without one. Its GridId is
+   * grids.length, so per-grid arrays (tileSlots, structureAt, gridTiles) have
+   * one more entry than `grids`. Use gridOf() to look up any grid by id.
+   */
+  readonly corona: PolarGrid | null;
   /** Indexed by FactionId. Index 0 is the neutral faction. */
   readonly factions: Faction[];
   /** Per grid, per tile: the tile's index in its owner's `tiles` list (-1 if neutral). */
@@ -172,7 +189,7 @@ export interface World {
   nextShipId: number;
   /** Commands waiting for their tick. */
   readonly pending: CommandQueue;
-  /** Ownable land tiles across all grids, for the win condition. Fixed at creation. */
+  /** Ownable land tiles across all body grids (not the Corona), for the win condition. */
   readonly ownableTiles: number;
   /** The faction that won, or null while the match is running. */
   winner: FactionId | null;
@@ -189,19 +206,25 @@ export function createWorld(
   maps: ReadonlyMap<string, TerrainMap> = new Map(),
 ): World {
   const grids = config.bodies.map((body, i) => createGrid(i, body, maps));
+  const C = BALANCE.corona;
+  const corona = config.corona
+    ? new PolarGrid(gridId(grids.length), C.rings, C.sectors, C.innerRings, C.middleRings)
+    : null;
+  const all: TileGrid[] = corona ? [...grids, corona] : grids;
   const world: World = {
     tick: 0,
     config,
     rng: Rng.fromSeed(config.seed),
     grids,
+    corona,
     factions: [],
-    tileSlots: grids.map((g) => new Int32Array(g.size).fill(-1)),
+    tileSlots: all.map((g) => new Int32Array(g.size).fill(-1)),
     bots: [],
     attacks: [],
     nextAttackId: 1,
     gridBodies: config.bodies.map((b) => b.bodyId ?? null),
     structures: [],
-    structureAt: grids.map((g) => new Int32Array(g.size).fill(-1)),
+    structureAt: all.map((g) => new Int32Array(g.size).fill(-1)),
     ships: [],
     nextShipId: 1,
     pending: new CommandQueue(),
@@ -217,6 +240,40 @@ function countOwnable(grid: RectGrid): number {
   let n = 0;
   for (let i = 0; i < grid.size; i++) if (isOwnableTerrain(grid.terrain[i]!)) n++;
   return n;
+}
+
+/** Any grid by id: a body's map, or the Corona. Undefined for unknown ids. */
+export function gridOf(world: World, id: number): TileGrid | undefined {
+  return world.grids[id] ?? (world.corona?.id === id ? world.corona : undefined);
+}
+
+/** True if `grid` is the Corona. */
+export function isCorona(world: World, grid: number): boolean {
+  return world.corona !== null && world.corona.id === grid;
+}
+
+/** Tiles a faction owns in the Corona. */
+export function coronaTiles(world: World, faction: Faction): number {
+  return world.corona ? faction.gridTiles[world.corona.id]! : 0;
+}
+
+/**
+ * Tiles a faction owns on bodies (everything but the Corona). Population,
+ * income modifiers and the win condition count only these.
+ */
+export function landTiles(world: World, faction: Faction): number {
+  return faction.tileCount - coronaTiles(world, faction);
+}
+
+/** The troop pool that pays for action on `grid`: the Corona's own, or the faction's main one. */
+export function troopPool(world: World, faction: Faction, grid: number): number {
+  return isCorona(world, grid) ? faction.coronaTroops : faction.troops;
+}
+
+/** Adds (or with a negative n, removes) troops in the pool for `grid`. */
+export function addTroops(world: World, faction: Faction, grid: number, n: number): void {
+  if (isCorona(world, grid)) faction.coronaTroops += n;
+  else faction.troops += n;
 }
 
 /** True while the match is still in its spawn phase. */
@@ -252,10 +309,11 @@ export function addFaction(world: World, name: string, kind: FactionKind): Facti
     hasSpawned: false,
     troops: 0,
     workers: 0,
+    coronaTroops: 0,
     solars: 0,
     solarsMilli: 0,
     tileCount: 0,
-    gridTiles: world.grids.map(() => 0),
+    gridTiles: world.tileSlots.map(() => 0),
     tiles: [],
     troopRatioPct: BALANCE.population.defaultTroopRatioPct,
   };

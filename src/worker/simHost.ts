@@ -85,6 +85,7 @@ export class SimHost {
         mapId: b.map!.mapId,
         bodyId: b.id,
       })),
+      corona: true,
       spawnPhaseTicks: BALANCE.match.spawnPhaseTicks,
     };
     const world = createWorld(config, new Map(maps.map((m) => [m.id, m])));
@@ -108,6 +109,14 @@ export class SimHost {
         terrain: g.terrain.slice(),
         owner: g.owner.slice(),
       })),
+      corona: world.corona && {
+        id: world.corona.id,
+        rings: world.corona.rings,
+        sectors: world.corona.sectors,
+        innerRings: world.corona.innerRings,
+        middleRings: world.corona.middleRings,
+        owner: world.corona.owner.slice(),
+      },
       factions: world.factions.slice(1).map((f) => ({ id: f.id, name: f.name, kind: f.kind })),
     };
     this.env.post({ type: "init", init });

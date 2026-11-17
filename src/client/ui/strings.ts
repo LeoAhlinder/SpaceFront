@@ -5,11 +5,22 @@ export const strings = {
   play: "Play",
   playAgain: "Play again",
   menuHelp:
-    "Click land to spawn · click to attack · build a Spaceport to launch landers · drag to pan · scroll to zoom",
+    "Click land to spawn · click to attack · build a Spaceport to launch landers · claim the Corona around the Sun with a Sun Base · drag to pan · scroll to zoom",
   loading: "Loading the solar system…",
   solarSystem: "Solar System",
   systemView: (key: string) => `System view (${key})`,
-  systemHint: "Click a world to open its map",
+  systemHint: "Click a world to open its map · click the Corona to play it here",
+  corona: "Corona",
+  coronaStat: (tiles: string, troops: string) => `${tiles} tiles · ${troops} troops`,
+  launchSunBase: (key: string) => `Sun Base (${key})`,
+  sunBaseInfo:
+    "Fly a Sun Base to an empty Corona tile: it claims the area, trains Corona troops and works as a Spaceport",
+  sunBaseHint:
+    "Click an empty tile in the Corona ring around the Sun · carries the attack % of your troops · Esc to cancel",
+  buildSolarSiphon: (key: string) => `Siphon (${key})`,
+  solarSiphonInfo:
+    "Drains Solars from the Sun: ×3 in the inner band, ×2 middle, ×1 outer · each extra siphon pays a bit less",
+  solarSiphonHint: "Click your own Corona land (inner band pays most) · Esc to cancel",
   buildSpaceport: (key: string) => `Spaceport (${key})`,
   buildHabitat: (key: string) => `Habitat (${key})`,
   cost: (solars: string) => `${solars} ☉`,

@@ -102,16 +102,18 @@ Status: playable in the browser against 40 bots. Checked in the desktop app's bu
 
 **Goal:** the Sun as the big prize.
 
-- ☐ `PolarGrid` with rings, sectors, and three bands; tests for its neighbors (wrap-around)
-- ☐ Corona render layer: polar texture on a ring mesh
-- ☐ **Sun Base ship** + **Sun Base** structure: claims an area on arrival, acts as a Spaceport
-- ☐ Corona territory spread: troops don't grow there; troops come from Landers and Sun Bases
-- ☐ `coronaSystem`: heat drain per band; decay of territory cut off from a Sun Base
-- ☐ **Solar Siphon**: built only in your own Corona territory, output by band, diminishing returns, captured along with its tile
-- ☐ Corona tiles excluded from the 80% win goal
-- ☐ Balance: one siphon ≈ a mid-sized planet's worker income
+- ☑ `PolarGrid` with rings, sectors, and three bands; tests for its neighbors (wrap-around)
+- ☑ Corona render layer: the polar grid drawn into a ring-shaped texture around the Sun (pixel → tile lookup made once), clickable in the system view
+- ☑ **Sun Base ship** + **Sun Base** structure: claims an area on arrival, acts as a Spaceport
+- ☑ Corona territory spread: troops don't grow there; troops come from Landers and Sun Bases (a separate Corona troop pool)
+- ☑ `coronaSystem`: heat drain per band; decay of territory cut off from a Sun Base
+- ☑ **Solar Siphon**: built only in your own Corona territory, output by band, diminishing returns, captured along with its tile
+- ☑ Corona tiles excluded from the 80% win goal
+- ☑ Balance: one siphon ≈ a mid-sized planet's worker income
+- ☑ HUD: Sun Base (U) and Siphon (S) buttons with live costs; Corona tiles and troops in the stats
+- ☑ Bots send a Sun Base now and then and build siphons on their Corona land
 
-**Done when:** holding the inner Corona gives a clear economic lead, and you can take it away from an opponent.
+**Done when:** holding the inner Corona gives a clear economic lead, and you can take it away from an opponent. ✔ Checked by a test (`corona.test.ts`, "M2.5 goal"): over 10 minutes, a faction with two inner siphons ends with ≈ 17× the Solars of one that stays home and ≈ 2.7× one with two outer siphons; a lander onto its Sun Base then takes the base, the siphons and all its Corona land, and the attacker's income becomes ≈ 40× the loser's.
 
 ---
 

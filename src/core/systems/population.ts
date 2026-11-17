@@ -1,7 +1,7 @@
 import { BALANCE } from "../../data/balance";
 import type { System } from "../tick";
 import type { Faction } from "../world/world";
-import { inSpawnPhase } from "../world/world";
+import { inSpawnPhase, landTiles } from "../world/world";
 import { finishedCounts, weightedModifier } from "../world/modifiers";
 
 const P = BALANCE.population;
@@ -15,21 +15,27 @@ export function populationCap(tiles: number, habitats = 0): number {
  * Grows each faction's population toward its cap (logistic growth: fast when
  * far below the cap, slowing near it; above the cap it slowly decays), splits the growth
  * between troops and workers, and slowly moves people between the two toward
- * the faction's troop ratio.
+ * the faction's troop ratio. Only land on bodies counts: nobody lives in the
+ * Corona, so its tiles add no population (its troops are a separate pool).
  */
 export const populationSystem: System = (world) => {
   if (inSpawnPhase(world)) return;
   const habitats = finishedCounts(world, "habitat");
   for (const faction of world.factions) {
     if (!faction.alive || !faction.hasSpawned) continue;
-    grow(faction, habitats[faction.id] ?? 0, weightedModifier(world, faction, "growthPct"));
+    grow(
+      faction,
+      landTiles(world, faction),
+      habitats[faction.id] ?? 0,
+      weightedModifier(world, faction, "growthPct"),
+    );
     rebalance(faction);
   }
 };
 
-function grow(faction: Faction, habitats: number, growthPct: number): void {
+function grow(faction: Faction, tiles: number, habitats: number, growthPct: number): void {
   const pop = faction.troops + faction.workers;
-  const cap = populationCap(faction.tileCount, habitats);
+  const cap = populationCap(tiles, habitats);
   let growth: number;
   if (pop <= cap) {
     const rate = P.growthBase + Math.floor((pop * P.growthPermille) / 1000);

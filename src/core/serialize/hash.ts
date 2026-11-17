@@ -24,6 +24,7 @@ export function hashWorld(world: World): number {
     h.int(f.troopRatioPct);
     h.int(f.troops);
     h.int(f.workers);
+    h.int(f.coronaTroops);
     h.int(f.solars);
     h.int(f.solarsMilli);
     h.int(f.tileCount);
@@ -36,6 +37,17 @@ export function hashWorld(world: World): number {
     h.int(g.height);
     h.words(g.owner);
     h.words(g.terrain);
+  }
+  const corona = world.corona;
+  h.int(corona ? 1 : 0);
+  if (corona) {
+    h.int(corona.id);
+    h.int(corona.rings);
+    h.int(corona.sectors);
+    h.int(corona.innerRings);
+    h.int(corona.middleRings);
+    h.words(corona.owner);
+    h.words(corona.terrain);
   }
 
   h.int(world.nextAttackId);

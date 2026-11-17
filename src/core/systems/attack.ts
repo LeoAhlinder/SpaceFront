@@ -8,7 +8,8 @@ import { FrontierHeap } from "../world/frontierHeap";
 import { gridModifier } from "../world/modifiers";
 import { setOwner } from "../world/territory";
 import { refGrid, refTile } from "../world/tileRef";
-import type { Attack, World } from "../world/world";
+import type { Attack, Faction, World } from "../world/world";
+import { addTroops, coronaTiles, gridOf, isCorona, troopPool } from "../world/world";
 
 const A = BALANCE.attack;
 
@@ -18,8 +19,9 @@ const scratch2 = new Int32Array(8);
 
 /**
  * Starts an attack from `attackerId` against whoever owns `focusTile`, using
- * `ratioPct` percent of the attacker's troops. A second attack on the same
- * target and grid adds its troops to the running one.
+ * `ratioPct` percent of the attacker's troops (in the Corona: of its Corona
+ * troops). A second attack on the same target and grid adds its troops to
+ * the running one.
  * Returns null on success or a reason it couldn't start.
  */
 export function startAttack(
@@ -30,11 +32,11 @@ export function startAttack(
   ratioPct: number,
 ): string | null {
   const attacker = world.factions[attackerId]!;
-  const target = world.grids[gridId]!.owner[focusTile]! as FactionId;
-  const troops = Math.floor((attacker.troops * ratioPct) / 100);
+  const target = gridOf(world, gridId)!.owner[focusTile]! as FactionId;
+  const troops = Math.floor((troopPool(world, attacker, gridId) * ratioPct) / 100);
   if (troops < 1) return "no troops";
   const reason = beginAttack(world, attackerId, gridId, focusTile, target, troops);
-  if (reason === null) attacker.troops -= troops;
+  if (reason === null) addTroops(world, attacker, gridId, -troops);
   return reason;
 }
 
@@ -61,7 +63,7 @@ export function beginAttack(
     return null;
   }
 
-  const grid = world.grids[gridId]!;
+  const grid = gridOf(world, gridId)!;
   const attack: Attack = {
     id: world.nextAttackId,
     attacker: attackerId,
@@ -107,38 +109,57 @@ function step(world: World, attack: Attack): boolean {
   if (!attacker.alive) return false; // eliminated: committed troops are lost
 
   const defender = attack.target === NEUTRAL ? null : world.factions[attack.target]!;
-  if (defender && !defender.alive) return finish(attacker, attack);
+  if (defender && !defender.alive) return finish(world, attacker, attack);
 
-  const grid = world.grids[attack.grid]!;
+  const grid = gridOf(world, attack.grid)!;
   const budget = Math.min(A.maxTilesPerTick, 1 + Math.floor(attack.troops / A.troopsPerExtraTile));
 
   for (let taken = 0; taken < budget;) {
     const tile = attack.frontier.pop();
-    if (tile < 0) return finish(attacker, attack);
+    if (tile < 0) return finish(world, attacker, attack);
     // Entries go stale when tiles change hands; skip those.
     if (grid.owner[tile] !== attack.target || !bordersOwner(grid, tile, attack.attacker)) continue;
 
     const cost = tileCost(world, grid, attack, tile);
-    if (attack.troops < cost) return finish(attacker, attack);
+    if (attack.troops < cost) return finish(world, attacker, attack);
     attack.troops -= cost;
     if (defender) {
-      const density = Math.floor(defender.troops / Math.max(1, defender.tileCount));
-      const loss = Math.floor((density * A.defenderLossPct) / 100);
-      defender.troops -= Math.min(defender.troops, loss);
+      const loss = Math.floor(
+        (defenseDensity(world, defender, attack.grid) * A.defenderLossPct) / 100,
+      );
+      addTroops(
+        world,
+        defender,
+        attack.grid,
+        -Math.min(troopPool(world, defender, attack.grid), loss),
+      );
     }
     setOwner(world, grid, tile, attack.attacker);
     extendFrontiers(world, grid, tile, attack.attacker);
     taken++;
-    if (defender && !defender.alive) return finish(attacker, attack);
+    if (defender && !defender.alive) return finish(world, attacker, attack);
   }
   return true;
 }
 
-/** Ends an attack and returns its unused troops to the attacker. */
-function finish(attacker: World["factions"][number], attack: Attack): false {
-  attacker.troops += attack.troops;
+/** Ends an attack and returns its unused troops to the attacker's pool for that map. */
+function finish(world: World, attacker: Faction, attack: Attack): false {
+  addTroops(world, attacker, attack.grid, attack.troops);
   attack.troops = 0;
   return false;
+}
+
+/**
+ * The defender's troops per tile on this map's side of the war: the main
+ * pool over its land, or in the Corona its Corona troops over its Corona tiles.
+ */
+function defenseDensity(world: World, defender: Faction, grid: number): number {
+  if (isCorona(world, grid)) {
+    return Math.floor(defender.coronaTroops / Math.max(1, coronaTiles(world, defender)));
+  }
+  return Math.floor(
+    defender.troops / Math.max(1, defender.tileCount - coronaTiles(world, defender)),
+  );
 }
 
 /** Troops it costs to take `tile` in this attack. */
@@ -147,7 +168,7 @@ function tileCost(world: World, grid: TileGrid, attack: Attack, tile: number): n
   let base: number = A.neutralCost;
   if (attack.target !== NEUTRAL) {
     const defender = world.factions[attack.target]!;
-    const density = Math.floor(defender.troops / Math.max(1, defender.tileCount));
+    const density = defenseDensity(world, defender, grid.id);
     base = A.enemyBaseCost + Math.floor((density * A.enemyDensityPct) / 100);
     base = Math.floor((base * gridModifier(world, grid.id, "defensePct")) / 100);
   }

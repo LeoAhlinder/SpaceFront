@@ -3,9 +3,10 @@ import type { FactionKind, ShipView, StructureView, TickDelta } from "../../core
 import { bodyById } from "../../data/bodies";
 import type { MatchInit, WorkerMessage } from "../../shared/messages";
 import { factionColor } from "../render/colors";
+import { strings } from "../ui/strings";
 
 /** Must match core's FACTION_STATS_STRIDE (client can't import core values). */
-const STATS_STRIDE = 6;
+const STATS_STRIDE = 8;
 const LEADERBOARD_SIZE = 10;
 /** Alerts disappear after this many ticks. */
 const ALERT_TICKS = 120;
@@ -16,7 +17,7 @@ export type Phase = "menu" | "loading" | "playing" | "ended";
 export type ViewState =
   { readonly kind: "system" } | { readonly kind: "planet"; readonly grid: number };
 /** What a click on a map does besides spawning/attacking: build something, or launch. */
-export type Mode = "none" | "spaceport" | "habitat" | "launch";
+export type Mode = "none" | "spaceport" | "habitat" | "launch" | "sunBase" | "solarSiphon";
 
 export interface FactionView {
   readonly id: number;
@@ -26,8 +27,11 @@ export interface FactionView {
   alive: boolean;
   troops: number;
   workers: number;
+  /** Land on bodies (the win condition counts only this). */
   tileCount: number;
   solars: number;
+  coronaTroops: number;
+  coronaTiles: number;
 }
 
 export interface Alert {
@@ -53,7 +57,7 @@ export const ui = {
   view: signal<ViewState>({ kind: "system" }),
   /** What a click on a map does besides spawning/attacking. */
   mode: signal<Mode>("none"),
-  /** The player's finished Spaceports (can launch). */
+  /** The player's finished Spaceports and Sun Bases (can launch). */
   readyPorts: signal(0),
   alerts: signal<readonly Alert[]>([]),
   /** Percent of troops sent per attack or launch (client-side setting). */
@@ -65,6 +69,8 @@ export const ui = {
 /** Map state for the renderer: owners, structures and ships, updated in place. */
 export const view = {
   init: null as MatchInit | null,
+  /** Grid id of the Corona, or -1. Per-grid arrays below include it at that index. */
+  coronaGrid: -1,
   owners: [] as Uint16Array[],
   /** Per grid: tiles whose owner changed since the renderer last drew. */
   dirty: [] as number[][],
@@ -98,9 +104,14 @@ export function applyWorkerMessage(message: WorkerMessage): void {
 function applyInit(init: MatchInit): void {
   view.init = init;
   view.owners = init.grids.map((g) => g.owner);
-  view.dirty = init.grids.map(() => []);
-  view.ownerCounts = init.grids.map(() => new Map<number, number>());
   view.ownable = init.grids.map((g) => g.terrain.filter((t) => t >= OWNABLE_MIN).length);
+  view.coronaGrid = init.corona?.id ?? -1;
+  if (init.corona) {
+    view.owners[init.corona.id] = init.corona.owner;
+    view.ownable[init.corona.id] = init.corona.owner.length;
+  }
+  view.dirty = view.owners.map(() => []);
+  view.ownerCounts = view.owners.map(() => new Map<number, number>());
   view.structures = new Map();
   view.ships = new Map();
   view.factions = new Map(
@@ -114,6 +125,8 @@ function applyInit(init: MatchInit): void {
         workers: 0,
         tileCount: 0,
         solars: 0,
+        coronaTroops: 0,
+        coronaTiles: 0,
       },
     ]),
   );
@@ -151,12 +164,14 @@ function applyDelta(delta: TickDelta): void {
     f.workers = stats[o + 3]!;
     f.tileCount = stats[o + 4]!;
     f.solars = stats[o + 5]!;
+    f.coronaTroops = stats[o + 6]!;
+    f.coronaTiles = stats[o + 7]!;
   }
   for (const s of delta.structures) view.structures.set(s.id, s);
   if (delta.structures.length > 0) {
     const me = view.init?.playerId;
     ui.readyPorts.value = [...view.structures.values()].filter(
-      (s) => s.owner === me && s.kind === "spaceport" && s.buildTicksLeft === 0,
+      (s) => s.owner === me && isPortKind(s.kind) && s.buildTicksLeft === 0,
     ).length;
   }
   for (const ship of delta.shipsLaunched) {
@@ -175,6 +190,11 @@ function applyDelta(delta: TickDelta): void {
     ui.phase.value = "ended";
   }
   publishFactions();
+}
+
+/** Spaceports and Sun Bases launch ships and trade. */
+export function isPortKind(kind: string): boolean {
+  return kind === "spaceport" || kind === "sunBase";
 }
 
 /** Warns the player about enemy landers heading for a world where they hold land. */
@@ -198,15 +218,24 @@ export function dismissAlert(id: number): void {
 
 /** Display name of the world a grid belongs to. */
 export function worldName(grid: number): string {
+  if (grid === view.coronaGrid) return strings.corona;
   const bodyId = view.init?.grids[grid]?.bodyId;
   return bodyId ? bodyById(bodyId).name : `World ${grid}`;
 }
 
-/** Structures of a kind the player owns (finished or not); build costs rise with this. */
+/**
+ * Structures of a kind the player owns (finished or not); build costs rise
+ * with this. Sun Base ships in flight count as Sun Bases, as in the simulation.
+ */
 export function ownedCount(kind: string): number {
   const me = view.init?.playerId;
   let n = 0;
   for (const s of view.structures.values()) if (s.owner === me && s.kind === kind) n++;
+  if (kind === "sunBase") {
+    for (const ship of view.ships.values()) {
+      if (ship.owner === me && ship.kind === "sunBaseShip") n++;
+    }
+  }
   return n;
 }
 

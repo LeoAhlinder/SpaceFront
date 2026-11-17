@@ -17,6 +17,7 @@ export { TICK_MS } from "./constants";
 export { drainDelta, FACTION_STATS_STRIDE, trackChanges } from "./delta/delta";
 export type { ShipView, StructureView, TickDelta } from "./delta/delta";
 export { assert, AssertionError } from "./debug";
+export { Band, BAND_KEYS, PolarGrid } from "./grid/polarGrid";
 export { RectGrid } from "./grid/rectGrid";
 export { isOwnableTerrain, Terrain, TERRAIN_COST_PCT } from "./grid/terrain";
 export type { TileGrid } from "./grid/tileGrid";
@@ -28,10 +29,20 @@ export * from "./math/fixed";
 export { Rng } from "./math/rng";
 export { ANGLE_FULL, ANGLE_HALF, ANGLE_QUARTER, fxCos, fxSin } from "./math/trig";
 export { hashWorld } from "./serialize/hash";
-export { bodyPosition, distance, isqrt, pathLength, planFlight } from "./space/space";
-export type { Flight, Point } from "./space/space";
+export {
+  bodyPosition,
+  coronaArc,
+  coronaTilePoint,
+  distance,
+  isqrt,
+  pathLength,
+  planFlight,
+} from "./space/space";
+export type { Endpoint, Flight, Point } from "./space/space";
 export { attackSystem, beginAttack, startAttack } from "./systems/attack";
-export { applyLaunch, shipSystem } from "./systems/ships";
+export { coronaSystem, foundSunBase, siphonIncomeMilli } from "./systems/corona";
+export { applyLaunch, endpointOf, planRoute, shipSystem } from "./systems/ships";
+export type { Route } from "./systems/ships";
 export {
   applyBuild,
   buildCost,
@@ -39,7 +50,7 @@ export {
   tooCloseToStructure,
 } from "./systems/structures";
 export { incomeSystem } from "./systems/income";
-export { deliver, tradeSystem } from "./systems/trade";
+export { deliver, isPort, tradeSystem } from "./systems/trade";
 export { finishedCounts, gridModifier, weightedModifier } from "./world/modifiers";
 export { populationCap, populationSystem } from "./systems/population";
 export { victorySystem } from "./systems/victory";
@@ -48,7 +59,17 @@ export type { RejectedCommand, System, TickContext } from "./tick";
 export { eliminate, setOwner } from "./world/territory";
 export { refGrid, refTile, tileRef } from "./world/tileRef";
 export type { TileRef } from "./world/tileRef";
-export { addFaction, createWorld, inSpawnPhase } from "./world/world";
+export {
+  addFaction,
+  addTroops,
+  coronaTiles,
+  createWorld,
+  gridOf,
+  inSpawnPhase,
+  isCorona,
+  landTiles,
+  troopPool,
+} from "./world/world";
 export type {
   Attack,
   BodyConfig,

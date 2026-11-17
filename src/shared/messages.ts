@@ -26,8 +26,22 @@ export interface MatchInit {
   /** Ownable land tiles in the world; owning winLandPct percent of them wins. */
   readonly ownableTiles: number;
   readonly winLandPct: number;
+  /** Body maps, indexed by grid id. */
   readonly grids: readonly GridInit[];
+  /** The Corona around the Sun (its grid id comes right after the bodies), or null. */
+  readonly corona: CoronaInit | null;
   readonly factions: readonly FactionInit[];
+}
+
+/** The Corona's polar grid: tile = ring × sectors + sector, ring 0 innermost. */
+export interface CoronaInit {
+  readonly id: number;
+  readonly rings: number;
+  readonly sectors: number;
+  /** Rings in the inner band; the next `middleRings` are the middle band, the rest outer. */
+  readonly innerRings: number;
+  readonly middleRings: number;
+  readonly owner: Uint16Array;
 }
 
 export interface GridInit {

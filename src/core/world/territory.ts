@@ -55,4 +55,5 @@ export function eliminate(world: World, id: FactionId): void {
   faction.alive = false;
   faction.troops = 0;
   faction.workers = 0;
+  faction.coronaTroops = 0;
 }

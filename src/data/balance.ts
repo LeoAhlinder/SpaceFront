@@ -12,7 +12,7 @@ export const BALANCE = {
   match: {
     /** Spawn phase at the start of a match: 10 seconds to pick a spot. */
     spawnPhaseTicks: 100,
-    /** Owning this percent of all ownable land wins (Corona excluded later). */
+    /** Owning this percent of all ownable land wins (the Corona doesn't count). */
     winLandPct: 80,
     /** Bots in a default single-player match. */
     defaultBotCount: 40,
@@ -90,6 +90,12 @@ export const BALANCE = {
     buildPortChancePct: 10,
     /** Chance per decision to build a Habitat (if it can afford it). */
     buildHabitatChancePct: 5,
+    /** Chance per decision to send a Sun Base ship (with a Spaceport, no Sun Base yet, and the Solars). */
+    sunBaseChancePct: 2,
+    /** Bots only attack in the Corona with at least this many Corona troops. */
+    minCoronaTroops: 100,
+    /** Chance per decision to build a Solar Siphon when it picked one of its Corona tiles. */
+    buildSiphonChancePct: 30,
     attackRatioMinPct: 30,
     attackRatioMaxPct: 50,
   },
@@ -114,6 +120,16 @@ export const BALANCE = {
       /** Extra Solars per tick per finished Habitat. */
       income: 2,
     },
+    /** Flown in by a Sun Base ship (paid at launch); acts as a Spaceport and trains corona troops. */
+    sunBase: {
+      cost: 5_000,
+      buildTicks: 0,
+    },
+    /** An outer-band siphon pays back its first price in about 40 s, like a Habitat; inner in 13 s. */
+    solarSiphon: {
+      cost: 20_000,
+      buildTicks: 60,
+    },
   },
 
   trade: {
@@ -137,6 +153,53 @@ export const BALANCE = {
     avoidMarginPct: 115,
     /** Troops it costs to secure the landing tile. */
     landingCost: 10,
+  },
+
+  /**
+   * The Corona: claimable space around the Sun (GAMEPLAY_PLAN.md §5). A polar
+   * grid of rings × sectors between the Sun's heat zone and Mercury's orbit.
+   * Ring 0 is the innermost. See docs/BALANCE.md for the intended economy.
+   */
+  corona: {
+    rings: 24,
+    sectors: 256,
+    /** Rings 0..innerRings-1 are the inner band, the next middleRings the middle band. */
+    innerRings: 8,
+    middleRings: 8,
+    /** Space units from the Sun's center: just outside the heat zone, inside Mercury's orbit. */
+    innerRadius: 700,
+    outerRadius: 1060,
+    /** The corona system runs its slow work (training, heat, decay) every this many ticks. */
+    intervalTicks: 10,
+    /**
+     * Heat drain per interval, per band: this share (per
+     * thousand) of the corona troops standing on that band's tiles is lost.
+     */
+    heatDrainPermille: { inner: 20, middle: 8, outer: 0 },
+    /** Corona tiles cut off from every Sun Base of their owner turn neutral, this many per interval. */
+    decayTilesPerInterval: 3,
+  },
+
+  sunBase: {
+    /** Tiles within this many steps of the landing tile are claimed (only neutral ones). */
+    claimRadius: 3,
+    /** Corona troops each finished Sun Base trains per corona interval… */
+    trainTroops: 20,
+    /** …until the faction's corona troops reach this many per Sun Base. */
+    troopCapPerBase: 1_500,
+  },
+
+  solarSiphon: {
+    /** Solars per tick of one siphon in the outer band; the bands multiply it. */
+    baseIncome: 50,
+    /** Output multiplier (percent) per band. */
+    bandPct: { inner: 300, middle: 200, outer: 100 },
+    /**
+     * Diminishing returns: a faction's siphons are ranked best band first, and
+     * the n-th (0-based) pays 100 − n × stepPct percent, but at least minPct.
+     */
+    diminishStepPct: 15,
+    diminishMinPct: 25,
   },
 
   /** Expansion cost multiplier per terrain, in percent. 0 = can't be owned. */

@@ -1,46 +1,43 @@
 import { BALANCE } from "../../data/balance";
-import { pathLength, planFlight } from "../space/space";
+import { pathLength } from "../space/space";
 import type { System } from "../tick";
 import type { Ship, Structure, World } from "../world/world";
+import { gridOf } from "../world/world";
+import { planRoute } from "./ships";
 import { nextTradeDelay } from "./structures";
 
 const T = BALANCE.trade;
 
 /**
- * Automatic trade (GAMEPLAY_PLAN.md §5): every finished Spaceport sends a
- * Freighter now and then to a random Spaceport of another faction. When it
+ * Automatic trade (GAMEPLAY_PLAN.md §5): every finished Spaceport (or Sun
+ * Base, which works as one) sends a Freighter now and then to a random port
+ * of another faction. When it
  * arrives, both owners earn Solars; longer routes pay more.
  */
 export const tradeSystem: System = (world, ctx) => {
   let ports: Structure[] | null = null;
   for (const port of world.structures) {
-    if (port.kind !== "spaceport" || port.nextTradeTick < 0 || port.nextTradeTick > ctx.tick) {
-      continue;
-    }
+    if (!isPort(port) || port.nextTradeTick < 0 || port.nextTradeTick > ctx.tick) continue;
     port.nextTradeTick = ctx.tick + nextTradeDelay(world);
     if (!world.factions[port.owner]!.alive) continue;
-    ports ??= world.structures.filter((s) => s.kind === "spaceport" && s.buildTicksLeft === 0);
+    ports ??= world.structures.filter((s) => isPort(s) && s.buildTicksLeft === 0);
     const partners = ports.filter((p) => p.owner !== port.owner && world.factions[p.owner]!.alive);
     if (partners.length === 0) continue;
     launchFreighter(world, port, partners[world.rng.nextInt(partners.length)]!);
   }
 };
 
+/** True for structures that launch ships and trade: Spaceports and Sun Bases. */
+export function isPort(s: Structure): boolean {
+  return s.kind === "spaceport" || s.kind === "sunBase";
+}
+
 function launchFreighter(world: World, from: Structure, to: Structure): void {
-  let arriveTick: number;
-  let waypoints: Ship["waypoints"] = [];
-  if (from.grid === to.grid) {
-    const units = world.grids[from.grid]!.distance(from.tile, to.tile) * T.unitsPerTile;
-    arriveTick =
-      world.tick + Math.max(BALANCE.ships.minFlightTicks, Math.ceil(units / T.freighterSpeed));
-  } else {
-    const fromBody = world.gridBodies[from.grid];
-    const toBody = world.gridBodies[to.grid];
-    if (!fromBody || !toBody) return; // no route between maps outside the solar system
-    const flight = planFlight(fromBody, toBody, world.tick, T.freighterSpeed);
-    arriveTick = flight.arriveTick;
-    waypoints = flight.waypoints;
-  }
+  const route = planRoute(world, from, to, T.freighterSpeed, (steps) =>
+    Math.ceil((steps * T.unitsPerTile) / T.freighterSpeed),
+  );
+  if (!route) return; // no route between maps outside the solar system
+  const { arriveTick, waypoints } = route;
   const ship: Ship = {
     id: world.nextShipId,
     kind: "freighter",
@@ -65,7 +62,7 @@ export function tradePayout(world: World, ship: Ship): number {
   const units =
     ship.waypoints.length > 0
       ? pathLength(ship.waypoints)
-      : world.grids[ship.toGrid]!.distance(ship.fromTile, ship.toTile) * T.unitsPerTile;
+      : gridOf(world, ship.toGrid)!.distance(ship.fromTile, ship.toTile) * T.unitsPerTile;
   return T.base + Math.floor((units * T.perUnitPermille) / 1000);
 }
 

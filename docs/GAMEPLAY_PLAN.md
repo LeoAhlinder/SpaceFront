@@ -138,8 +138,9 @@ The Sun is where the **big money** is. One Solar Siphon should pay about **as mu
 
 - **Sun Bases** are how you get in (§7). You fly a **Sun Base** to an empty Corona tile. It claims a small area around itself and becomes your foothold.
 - From there, your Corona territory **spreads like normal territory**, using the attack slider. There are two differences:
-  - **Troops don't grow in the Corona.** Troops must be shipped in by Troop Landers from your planets, or come from Sun Bases.
-  - **You can only expand from tiles connected to a Sun Base.** If an enemy destroys or captures the base, the territory cut off from it slowly decays back to neutral.
+  - **Troops don't grow in the Corona.** Troops must be shipped in by Troop Landers from your planets, or come from Sun Bases. The Corona has its own troop pool, separate from your planets' troops: Corona attacks are paid from it, and landers or launches from a Sun Base carry Corona troops.
+  - **Your Corona territory must stay connected to a Sun Base.** If an enemy destroys or captures the base, the territory cut off from it slowly decays back to neutral.
+- Corona tiles add no population and don't count toward the 80% win goal.
 - Several players can hold different parts of the Corona at once, so the border fights spill around the Sun.
 
 ### The Solar Siphon (energy drainer)
