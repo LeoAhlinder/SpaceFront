@@ -2,6 +2,7 @@
  * Public API of the simulation. Code outside core imports only from this file
  * (and the client/shared folders only import *types* from it).
  */
+export { addBot, aiSystem } from "./ai/bot";
 export { applyCommands, queueCommand } from "./commands/applyCommands";
 export type { AttackCommand, Command, SetRatioCommand, SpawnCommand } from "./commands/commands";
 export { validateCommand } from "./commands/validate";
@@ -23,10 +24,13 @@ export { populationCap, populationSystem } from "./systems/population";
 export { runTick, runTicks, SYSTEMS } from "./tick";
 export type { RejectedCommand, System, TickContext } from "./tick";
 export { eliminate, setOwner } from "./world/territory";
+export { refGrid, refTile, tileRef } from "./world/tileRef";
+export type { TileRef } from "./world/tileRef";
 export { addFaction, createWorld } from "./world/world";
 export type {
   Attack,
   BodyConfig,
+  BotState,
   Difficulty,
   Faction,
   FactionKind,

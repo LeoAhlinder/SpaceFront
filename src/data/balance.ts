@@ -49,6 +49,30 @@ export const BALANCE = {
     ownedNeighborWeight: 40,
   },
 
+  /** The dumb bots that fill every body (GAMEPLAY_PLAN.md §4). */
+  bot: {
+    /** A bot decides every interval + 0..jitter ticks. */
+    decisionIntervalTicks: 10,
+    decisionJitterTicks: 5,
+    /** Random tiles tried per decision when looking for a spawn spot. */
+    spawnAttempts: 50,
+    /** Own tiles sampled per decision to find neighbors (instead of scanning all land). */
+    sampleTiles: 16,
+    /** Below this many troops a bot waits. */
+    minTroops: 300,
+    /** Max attacks a bot runs at once. */
+    maxRunningAttacks: 2,
+    /** Percent of troops sent when expanding into neutral land. */
+    expandRatioMinPct: 20,
+    expandRatioMaxPct: 40,
+    /** Only attack a faction whose troops are below this percent of the bot's. */
+    weakerThanPct: 70,
+    /** Chance per decision to attack a weaker neighbor while neutral land remains. */
+    attackChancePct: 25,
+    attackRatioMinPct: 30,
+    attackRatioMaxPct: 50,
+  },
+
   /** Expansion cost multiplier per terrain, in percent. 0 = can't be owned. */
   terrainCostPct: {
     space: 0,

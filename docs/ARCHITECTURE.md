@@ -136,7 +136,9 @@ interface World {
   config: MatchConfig; // difficulty, map, player count
   bodies: Body[]; // planets, moons, asteroids
   corona: Corona; // ring around the Sun
-  factions: Faction[]; // index 0 = neutral
+  factions: Faction[]; // index 0 = neutral; each keeps a list of its tiles
+  tileSlots: Int32Array[]; // per grid: a tile's index in its owner's tile list
+  bots: BotState[]; // per-bot RNG stream and next decision tick
   units: UnitStore; // ships (struct-of-arrays)
   structures: StructureStore; // buildings (struct-of-arrays)
   attacks: Attack[];
@@ -146,6 +148,7 @@ interface World {
 ```
 
 - **Faction ids are `uint16`.** 0 = neutral/unowned.
+- **Tile lists:** every faction keeps `tiles`, the TileRefs (`grid × 2^24 + tile`) it owns, kept in sync by `setOwner` with O(1) swap-removal through `tileSlots`. AI and attacks look at a faction's own land through this list instead of scanning whole grids.
 - **Entity stores** (units, structures) use struct-of-arrays with typed arrays and a free list for reuse, because thousands of ships may exist.
 
 ### 4.4 Tile grids
@@ -175,7 +178,7 @@ A tile is identified by `(gridId, index)`. Code in hot loops only works with pla
 - An `Attack` has an attacker, a defender (or neutral), a troop pool, and a **frontier**: the attacker's tiles that border the target.
 - Each tick it conquers tiles from the frontier in priority order (closest to the click target, then lowest defense). Each tile costs troops depending on the defender's density, terrain and Shield Generators.
 - The attack ends when its troops run out, the frontier is empty, or the two sides become allies. Leftover troops go back to the attacker.
-- The frontier is updated incrementally, never rebuilt by scanning the whole map.
+- A new attack seeds its frontier from the attacker's tile list. After that the frontier is updated incrementally and never rebuilt by scanning the whole map.
 
 ### 4.6 Space and ships
 
@@ -223,7 +226,7 @@ type Command =
 ### 4.8 AI
 
 - Lives in `core/ai/` and runs inside the simulation, so it is deterministic and can later run on the server.
-- **Bots:** a few rules (expand into neutral land, attack only weaker neighbors, otherwise idle). Cheap enough for hundreds of bots.
+- **Bots** (`core/ai/bot.ts`): a few rules. A bot spawns on a random free tile, then each decision samples 16 of its own tiles to see what it borders. It mostly expands into neutral land, sometimes attacks a neighbor with under 70% of its troops, never attacks anyone stronger, and runs at most 2 attacks at once. Each bot has its own RNG stream and decides every 10–15 ticks, offset by its id. 50 bots on Earth cost about 0.25 ms per tick.
 - **Nations:** utility-based. Every decision interval, each nation scores candidate actions (expand, attack neighbor X, build Y, launch to body Z, send a Sun Base, ally/betray) and picks the best one. How it scores them comes from an `AiProfile`:
 
   ```ts

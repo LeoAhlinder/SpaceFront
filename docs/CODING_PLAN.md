@@ -42,9 +42,9 @@ How to read the tasks: each one is roughly one PR. `☐` = not started.
 
 ### M0.5 Bots
 
-- ☐ `core/ai/bot.ts`: spawn on random land, expand into neutral land, attack weaker neighbors only
-- ☐ `aiSystem` with staggered decision ticks
-- ☐ Test: 50 bots for 5,000 ticks with no errors and stable hashes
+- ☑ `core/ai/bot.ts`: spawn on random land, expand into neutral land, attack weaker neighbors only
+- ☑ `aiSystem` with staggered decision ticks
+- ☑ Test: 50 bots for 5,000 ticks with no errors and stable hashes
 
 ### M0.6 Worker and client
 

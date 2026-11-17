@@ -1,3 +1,4 @@
+import { aiSystem } from "./ai/bot";
 import { applyCommands } from "./commands/applyCommands";
 import type { Command } from "./commands/commands";
 import { attackSystem } from "./systems/attack";
@@ -22,9 +23,9 @@ export type System = (world: World, ctx: TickContext) => void;
 
 /**
  * The systems in the order they run each tick (ARCHITECTURE.md §4.1).
- * Still to come: orbit, income, ships, combat, construction, corona, ai, victory.
+ * Still to come: orbit, income, ships, combat, construction, corona, victory.
  */
-export const SYSTEMS: readonly System[] = [applyCommands, populationSystem, attackSystem];
+export const SYSTEMS: readonly System[] = [applyCommands, populationSystem, attackSystem, aiSystem];
 
 /** Runs one tick: every system in order, then advances the tick counter. */
 export function runTick(world: World, systems: readonly System[] = SYSTEMS): TickContext {

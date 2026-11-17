@@ -6,6 +6,7 @@ import { NEUTRAL } from "../ids";
 import type { System } from "../tick";
 import { FrontierHeap } from "../world/frontierHeap";
 import { setOwner } from "../world/territory";
+import { refGrid, refTile } from "../world/tileRef";
 import type { Attack, World } from "../world/world";
 
 const A = BALANCE.attack;
@@ -52,11 +53,18 @@ export function startAttack(
     focusTile,
     frontier: new FrontierHeap(),
   };
-  // One full scan when the attack starts; afterwards the frontier is updated
-  // incrementally as tiles change hands.
-  for (let tile = 0; tile < grid.size; tile++) {
-    if (isCandidate(grid, tile, target) && bordersOwner(grid, tile, attackerId)) {
-      attack.frontier.push(priority(world, grid, attack, tile), tile);
+  // Seed the frontier from the attacker's own tiles (not a whole-grid scan);
+  // afterwards it is updated incrementally as tiles change hands. A target tile
+  // next to several attacker tiles is pushed more than once; the extra entries
+  // are skipped as stale when popped.
+  for (const ref of attacker.tiles) {
+    if (refGrid(ref) !== gridId) continue;
+    const n = grid.neighbors(refTile(ref), scratch);
+    for (let i = 0; i < n; i++) {
+      const tile = scratch[i]!;
+      if (isCandidate(grid, tile, target)) {
+        attack.frontier.push(priority(world, grid, attack, tile), tile);
+      }
     }
   }
   if (attack.frontier.size === 0) return "no shared border";

@@ -6,6 +6,7 @@ import { factionId, gridId, MAX_FACTION_ID, NEUTRAL } from "../ids";
 import type { TerrainMap } from "../map/terrainMap";
 import { Rng } from "../math/rng";
 import type { FrontierHeap } from "./frontierHeap";
+import type { TileRef } from "./tileRef";
 
 export type Difficulty = "easy" | "normal" | "hard" | "impossible";
 
@@ -37,8 +38,23 @@ export interface Faction {
   workers: number;
   solars: number;
   tileCount: number;
+  /**
+   * Every tile the faction owns, as TileRefs, in no particular order (but a
+   * deterministic one). Lets AI and attacks look at a faction's land without
+   * scanning whole grids. Kept in sync by setOwner.
+   */
+  readonly tiles: TileRef[];
   /** Target percent of population that are troops (1–100). */
   troopRatioPct: number;
+}
+
+/** AI state for one bot faction. */
+export interface BotState {
+  readonly faction: FactionId;
+  /** The bot's own random stream, so bots never shift each other's numbers. */
+  readonly rng: Rng;
+  /** Next tick on which this bot decides. Spread out so bots don't all think at once. */
+  nextDecisionTick: number;
 }
 
 /** A running attack: troops spreading into one target's land on one grid. */
@@ -70,6 +86,10 @@ export interface World {
   readonly grids: DiscGrid[];
   /** Indexed by FactionId. Index 0 is the neutral faction. */
   readonly factions: Faction[];
+  /** Per grid, per tile: the tile's index in its owner's `tiles` list (-1 if neutral). */
+  readonly tileSlots: Int32Array[];
+  /** Bot AI states, in creation order. */
+  readonly bots: BotState[];
   /** Running attacks, in creation order. */
   attacks: Attack[];
   nextAttackId: number;
@@ -85,12 +105,15 @@ export function createWorld(
   config: MatchConfig,
   maps: ReadonlyMap<string, TerrainMap> = new Map(),
 ): World {
+  const grids = config.bodies.map((body, i) => createGrid(i, body, maps));
   const world: World = {
     tick: 0,
     config,
     rng: Rng.fromSeed(config.seed),
-    grids: config.bodies.map((body, i) => createGrid(i, body, maps)),
+    grids,
     factions: [],
+    tileSlots: grids.map((g) => new Int32Array(g.size).fill(-1)),
+    bots: [],
     attacks: [],
     nextAttackId: 1,
     pending: new CommandQueue(),
@@ -127,6 +150,7 @@ export function addFaction(world: World, name: string, kind: FactionKind): Facti
     workers: 0,
     solars: 0,
     tileCount: 0,
+    tiles: [],
     troopRatioPct: BALANCE.population.defaultTroopRatioPct,
   };
   world.factions.push(faction);

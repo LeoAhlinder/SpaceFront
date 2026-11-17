@@ -49,7 +49,16 @@ export function hashWorld(world: World): number {
     h.ints(a.frontier.tiles);
   }
 
-  // world.pending (queued commands) is input, not state, so it isn't hashed.
+  h.int(world.bots.length);
+  for (const b of world.bots) {
+    h.int(b.faction);
+    h.words(b.rng.state);
+    h.int(b.nextDecisionTick);
+  }
+
+  // Not hashed: world.pending (queued commands are input, not state), and the
+  // faction tile lists / tileSlots (derived from the owner arrays; their order
+  // only matters through outcomes, which the hash already covers).
   return h.digest();
 }
 

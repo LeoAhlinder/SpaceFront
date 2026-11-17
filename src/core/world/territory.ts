@@ -1,6 +1,7 @@
 import type { TileGrid } from "../grid/tileGrid";
 import type { FactionId } from "../ids";
 import { NEUTRAL } from "../ids";
+import { refGrid, refTile, tileRef } from "./tileRef";
 import type { World } from "./world";
 
 /**
@@ -11,10 +12,27 @@ export function setOwner(world: World, grid: TileGrid, tile: number, newOwner: F
   const oldOwner = grid.owner[tile]!;
   if (oldOwner === newOwner) return;
   grid.owner[tile] = newOwner;
-  if (newOwner !== NEUTRAL) world.factions[newOwner]!.tileCount += 1;
+  const slots = world.tileSlots[grid.id]!;
+  if (oldOwner !== NEUTRAL) {
+    // Swap-remove the tile from the loser's list.
+    const loser = world.factions[oldOwner]!;
+    const slot = slots[tile]!;
+    const last = loser.tiles.pop()!;
+    if (slot < loser.tiles.length) {
+      loser.tiles[slot] = last;
+      world.tileSlots[refGrid(last)]![refTile(last)] = slot;
+    }
+    slots[tile] = -1;
+    loser.tileCount -= 1;
+  }
+  if (newOwner !== NEUTRAL) {
+    const winner = world.factions[newOwner]!;
+    slots[tile] = winner.tiles.length;
+    winner.tiles.push(tileRef(grid.id, tile));
+    winner.tileCount += 1;
+  }
   if (oldOwner !== NEUTRAL) {
     const loser = world.factions[oldOwner]!;
-    loser.tileCount -= 1;
     if (loser.tileCount === 0 && loser.hasSpawned) eliminate(world, oldOwner as FactionId);
   }
 }
