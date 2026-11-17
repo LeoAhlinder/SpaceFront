@@ -1,6 +1,6 @@
 import type { Actions } from "../actions";
 import { cssColor } from "../render/colors";
-import type { FactionView } from "../store/clientStore";
+import type { FactionView, Mode } from "../store/clientStore";
 import { BALANCE } from "../../data/balance";
 import type { BodyDef } from "../../data/bodies";
 import { bodyById, modifierOf, structureCost } from "../../data/bodies";
@@ -136,22 +136,32 @@ function Actions({ actions }: { actions: Actions }) {
   const v = ui.view.value;
   const worldPct = v.kind === "planet" ? modifierOf(worldBody(v.grid), "buildCostPct") : 100;
   const costOf = (kind: BuildKind) =>
-    structureCost(
-      BALANCE.structures[kind].cost,
-      BALANCE.structures.costStepPct,
-      ownedCount(kind),
-      // The Corona has no world modifiers.
-      kind === "sunBase" || kind === "solarSiphon" ? 100 : worldPct,
-    );
-  const buildButton = (kind: BuildKind, label: string, info: string, needsPort = false) => {
+    kind === "warship"
+      ? structureCost(BALANCE.warship.cost, BALANCE.warship.costStepPct, ownedCount(kind), 100)
+      : kind === "kineticStrike" || kind === "antimatterWarhead"
+        ? BALANCE.weapons[kind].cost
+        : structureCost(
+            BALANCE.structures[kind].cost,
+            BALANCE.structures.costStepPct,
+            ownedCount(kind),
+            // The Corona has no world modifiers.
+            kind === "sunBase" || kind === "solarSiphon" ? 100 : worldPct,
+          );
+  const buildButton = (
+    kind: BuildKind,
+    label: string,
+    info: string,
+    needs: "port" | "silo" | null = null,
+  ) => {
     const cost = costOf(kind);
     const affordable = !!me && me.solars >= cost;
-    const blocked = needsPort && !canLaunch;
+    const blocked =
+      (needs === "port" && !canLaunch) || (needs === "silo" && ui.loadedSilos.value === 0);
     return (
       <button
         class={`build ${mode === kind ? "active" : ""}`}
         disabled={!spawned || !affordable || blocked}
-        title={blocked ? strings.needSpaceport : info}
+        title={blocked ? (needs === "port" ? strings.needSpaceport : strings.needSilo) : info}
         onClick={() => actions.toggleMode(kind)}
       >
         <span>{label}</span>
@@ -184,29 +194,70 @@ function Actions({ actions }: { actions: Actions }) {
         "sunBase",
         strings.launchSunBase(KEYMAP.launchSunBase.toUpperCase()),
         strings.sunBaseInfo,
-        true,
+        "port",
       )}
       {buildButton(
         "solarSiphon",
         strings.buildSolarSiphon(KEYMAP.buildSolarSiphon.toUpperCase()),
         strings.solarSiphonInfo,
       )}
+      <span class="divider" />
+      {buildButton(
+        "shieldGenerator",
+        strings.buildShield(KEYMAP.buildShield.toUpperCase()),
+        strings.shieldInfo,
+      )}
+      {buildButton(
+        "orbitalDefense",
+        strings.buildOrbitalDefense(KEYMAP.buildOrbitalDefense.toUpperCase()),
+        strings.orbitalDefenseInfo,
+      )}
+      {buildButton(
+        "warship",
+        strings.launchWarship(KEYMAP.launchWarship.toUpperCase()),
+        strings.warshipInfo,
+        "port",
+      )}
+      {buildButton(
+        "launchSilo",
+        strings.buildLaunchSilo(KEYMAP.buildLaunchSilo.toUpperCase()),
+        strings.launchSiloInfo,
+      )}
+      {buildButton(
+        "kineticStrike",
+        strings.fireKinetic(KEYMAP.fireKinetic.toUpperCase()),
+        strings.kineticInfo,
+        "silo",
+      )}
+      {buildButton(
+        "antimatterWarhead",
+        strings.fireAntimatter(KEYMAP.fireAntimatter.toUpperCase()),
+        strings.antimatterInfo,
+        "silo",
+      )}
     </div>
   );
 }
 
-type BuildKind = "spaceport" | "habitat" | "sunBase" | "solarSiphon";
+type BuildKind = Exclude<Mode, "none" | "launch">;
 
-const MODE_HINTS = {
+const MODE_HINTS: Record<Exclude<Mode, "none">, string> = {
   spaceport: strings.buildHint,
   habitat: strings.habitatHint,
   launch: strings.launchHint,
   sunBase: strings.sunBaseHint,
   solarSiphon: strings.solarSiphonHint,
-} as const;
+  shieldGenerator: strings.shieldHint,
+  orbitalDefense: strings.orbitalDefenseHint,
+  launchSilo: strings.launchSiloHint,
+  warship: strings.warshipHint,
+  kineticStrike: strings.kineticHint,
+  antimatterWarhead: strings.antimatterHint,
+};
 
 function ModeBanner() {
   const mode = ui.mode.value;
+  if (ui.selectedWarship.value !== null) return <div class="banner">{strings.patrolHint}</div>;
   if (mode === "none") return null;
   return <div class="banner">{MODE_HINTS[mode]}</div>;
 }
@@ -241,6 +292,12 @@ function StatsPanel({ me }: { me: FactionView }) {
         label={strings.land}
         value={`${formatCount(me.tileCount)} · ${strings.landGoal(landShare(me) * 100, goal)}`}
       />
+      {ui.warships.value > 0 && (
+        <Stat
+          label={strings.warships}
+          value={`${ui.warships.value} · ${strings.nextWarship(KEYMAP.nextWarship.toUpperCase())}`}
+        />
+      )}
       {(me.coronaTiles > 0 || me.coronaTroops > 0) && (
         <Stat
           label={strings.corona}

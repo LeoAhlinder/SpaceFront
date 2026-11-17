@@ -1,6 +1,6 @@
 import type { FactionId, GridId } from "../ids";
 import type { SignalKind } from "../world/diplomacy";
-import type { ShipKind, StructureKind } from "../world/world";
+import type { ShipKind, StructureKind, WeaponKind } from "../world/world";
 
 /**
  * Every way to change the game: from the human, the AI or (later) the network.
@@ -15,7 +15,10 @@ export type Command =
   | AllyCommand
   | GiftCommand
   | EmbargoCommand
-  | SignalCommand;
+  | SignalCommand
+  | LaunchWarshipCommand
+  | PatrolCommand
+  | FireWeaponCommand;
 
 /** Place the faction's starting territory around `tile`. Once per faction. */
 export interface SpawnCommand {
@@ -110,4 +113,45 @@ export interface SignalCommand {
   readonly signal: SignalKind;
   /** The faction the signal is about (for "attack"), else 0. */
   readonly about: FactionId;
+}
+
+/**
+ * Where a Warship patrols: around a fixed point in space (x, y), or around a
+ * world (guardGrid ≥ 0; the area moves with the body, and x, y are ignored).
+ */
+export interface PatrolArea {
+  readonly x: number;
+  readonly y: number;
+  /** Grid of the body to guard, or -1 for the fixed point. */
+  readonly guardGrid: number;
+}
+
+/** Buy a Warship at one of the faction's finished Spaceports or Sun Bases and send it to patrol. */
+export interface LaunchWarshipCommand extends PatrolArea {
+  readonly type: "launchWarship";
+  readonly faction: FactionId;
+  /** Structure id of the launching Spaceport or Sun Base. */
+  readonly from: number;
+}
+
+/** Give one of the faction's Warships a new patrol area. */
+export interface PatrolCommand extends PatrolArea {
+  readonly type: "patrol";
+  readonly faction: FactionId;
+  /** The Warship's id. */
+  readonly warship: number;
+}
+
+/**
+ * Fire a Kinetic Strike or an Antimatter Warhead from one of the faction's
+ * loaded Launch Silos at `tile` on any map (paid now). Everyone is warned.
+ */
+export interface FireWeaponCommand {
+  readonly type: "fireWeapon";
+  readonly faction: FactionId;
+  readonly kind: WeaponKind;
+  /** Structure id of the Launch Silo. */
+  readonly from: number;
+  readonly grid: GridId;
+  readonly tile: number;
 }

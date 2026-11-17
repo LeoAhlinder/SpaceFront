@@ -158,6 +158,19 @@ export const BALANCE = {
     focusTicks: 600,
     /** Percent of its troops a loyal nation sends an ally that calls for help. */
     helpGiftPct: 15,
+    /** Grudge against a faction whose weapon hit the nation's land. */
+    weaponGrudge: 120,
+    /** Most Warships a nation keeps: warships preference / this, at least 1. */
+    warshipsPerShip: 20,
+    /** After buying a Warship, a nation waits this long before buying another (90 s). */
+    warshipCooldownTicks: 900,
+    /** Most Orbital Defense Platforms per world, and Shield Generators per 1,000 own tiles. */
+    defensesPerWorld: 1,
+    shieldsPerKiloTile: 2,
+    /** Orbital Defense goes up on worlds where the nation holds at least this many tiles. */
+    defendWorldTiles: 500,
+    /** Solars a nation keeps after buying a weapon or silo (so it still builds). */
+    weaponReserve: 2_000,
   },
 
   structures: {
@@ -189,6 +202,103 @@ export const BALANCE = {
     solarSiphon: {
       cost: 20_000,
       buildTicks: 60,
+    },
+    /** Raises the troop cost of attacking its owner's land nearby (see `shield`). */
+    shieldGenerator: {
+      cost: 3_000,
+      buildTicks: 50,
+    },
+    /** Shoots hostile ships and warheads near its world (see `orbitalDefense`). */
+    orbitalDefense: {
+      cost: 6_000,
+      buildTicks: 80,
+    },
+    /** Fires Kinetic Strikes and Antimatter Warheads (see `weapons`). */
+    launchSilo: {
+      cost: 8_000,
+      buildTicks: 100,
+    },
+  },
+
+  /** Hit points of things that can be shot (GAMEPLAY_PLAN.md §6–§8). */
+  hp: {
+    troopLander: 120,
+    freighter: 60,
+    sunBaseShip: 150,
+    warship: 300,
+    kineticStrike: 40,
+    antimatterWarhead: 80,
+    /** Solar Siphons are the only structures Warships shoot at. */
+    solarSiphon: 400,
+  },
+
+  /** Space combat: Warships, Orbital Defense Platforms, the spatial hash. */
+  combat: {
+    /** Targeting and firing run every this many ticks; movement every tick. */
+    intervalTicks: 5,
+    /** Spatial hash cell size in space units (at least the longest detection range). */
+    cellSize: 500,
+    /** A patrol point must lie within this distance of the Sun. */
+    maxPatrolDistance: 11_000,
+  },
+
+  warship: {
+    /** Launched from a Spaceport or Sun Base; the price rises with each one owned. */
+    cost: 5_000,
+    costStepPct: 50,
+    /** Space units per tick (landers fly 8, Freighters 10). */
+    speed: 9,
+    /** Sees (and chases) hostile ships this far away, fires within fireRange. */
+    detectRange: 400,
+    fireRange: 160,
+    /** Damage per shot; one shot per combat interval. */
+    damage: 20,
+    /** Wanders within this distance of its patrol point. */
+    patrolRadius: 250,
+  },
+
+  orbitalDefense: {
+    /** Shoots hostile ships and warheads within this many space units of its world. */
+    range: 300,
+    /** Damage per shot to weapons, and to ships and Warships (it is built against warheads). */
+    damage: 40,
+    shipDamage: 10,
+    /** Ticks between shots. */
+    reloadTicks: 10,
+  },
+
+  shield: {
+    /** Land of its owner within this many steps of a finished Shield Generator… */
+    radius: 10,
+    /** …costs attackers this percent of the normal troops (several shields don't stack). */
+    defensePct: 200,
+  },
+
+  weapons: {
+    /** Space units per tick, and tiles per tick for strikes on the silo's own world. */
+    speed: 14,
+    tilesPerTick: 6,
+    /** A silo reloads for this long after firing. */
+    siloReloadTicks: 300,
+    kineticStrike: {
+      /** Paid per shot (no rising price: weapons are used up). */
+      cost: 4_000,
+      /** Steps from the impact tile: structures are destroyed and troops killed. */
+      radius: 2,
+      /** Troops killed per tile hit: flat, plus this percent of the owner's troops per tile. */
+      killPerTile: 60,
+      killDensityPct: 300,
+    },
+    antimatterWarhead: {
+      cost: 25_000,
+      /** Steps from the impact tile: territory turns neutral and structures are destroyed. */
+      radius: 10,
+      /** The owner also loses this percent of its troops per tile for each tile wiped. */
+      killDensityPct: 200,
+      /** The wiped area stays irradiated this long (5 minutes)… */
+      falloutTicks: 3_000,
+      /** …while taking a tile there costs this percent of the troops, and nothing can be built. */
+      falloutCostPct: 400,
     },
   },
 

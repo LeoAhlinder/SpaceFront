@@ -1,7 +1,10 @@
+import { BALANCE } from "../../data/balance";
 import { isOwnableTerrain } from "../grid/terrain";
+import { patrolAreaError, warshipCost, warshipOf } from "../systems/combat";
+import { isIrradiated } from "../systems/weapons";
 import type { SignalKind } from "../world/diplomacy";
 import { hasRequest, isAllied } from "../world/diplomacy";
-import type { World } from "../world/world";
+import type { StructureKind, World } from "../world/world";
 import { gridOf, inSpawnPhase, isCorona, troopPool } from "../world/world";
 import { buildCost, tooCloseToStructure } from "../systems/structures";
 import type { Command } from "./commands";
@@ -49,9 +52,7 @@ export function validateCommand(world: World, command: Command): string | null {
     case "build": {
       if (!faction.hasSpawned) return "not spawned yet";
       const kind = command.kind;
-      if (kind !== "spaceport" && kind !== "habitat" && kind !== "solarSiphon") {
-        return "unknown structure"; // Sun Bases come by ship
-      }
+      if (!BUILDABLE.includes(kind)) return "unknown structure"; // Sun Bases come by ship
       const grid = gridOf(world, command.grid);
       if (!grid) return "unknown grid";
       if (!isTileIndex(command.tile, grid.size)) return "tile is not on the map";
@@ -62,6 +63,7 @@ export function validateCommand(world: World, command: Command): string | null {
       }
       if (grid.owner[command.tile] !== command.faction) return "not your land";
       if (!isOwnableTerrain(grid.terrain[command.tile]!)) return "terrain can't be built on";
+      if (isIrradiated(world, command.grid, command.tile)) return "the land is irradiated";
       if (tooCloseToStructure(world, command.grid, command.tile)) {
         return "too close to another structure";
       }
@@ -144,10 +146,60 @@ export function validateCommand(world: World, command: Command): string | null {
       }
       return null;
     }
+    case "launchWarship": {
+      if (inSpawnPhase(world)) return "spawn phase";
+      const port = world.structures[command.from];
+      if (!port || !isPortKind(port.kind) || port.owner !== command.faction) {
+        return "not your spaceport";
+      }
+      if (port.buildTicksLeft > 0) return "spaceport not finished";
+      if (!isCorona(world, port.grid) && !world.gridBodies[port.grid]) return "no route";
+      const reason = patrolAreaError(world, command);
+      if (reason !== null) return reason;
+      return faction.solars < warshipCost(world, command.faction) ? "not enough Solars" : null;
+    }
+    case "patrol":
+      if (!warshipOf(world, command.faction, command.warship)) return "not your warship";
+      return patrolAreaError(world, command);
+    case "fireWeapon": {
+      if (command.kind !== "kineticStrike" && command.kind !== "antimatterWarhead") {
+        return "unknown weapon";
+      }
+      if (inSpawnPhase(world)) return "spawn phase";
+      const silo = world.structures[command.from];
+      if (!silo || silo.kind !== "launchSilo" || silo.owner !== command.faction) {
+        return "not your launch silo";
+      }
+      if (silo.buildTicksLeft > 0) return "launch silo not finished";
+      if (silo.readyTick > world.tick) return "launch silo is reloading";
+      const grid = gridOf(world, command.grid);
+      if (!grid) return "unknown grid";
+      if (!isTileIndex(command.tile, grid.size) || !grid.isUsable(command.tile)) {
+        return "tile is not on the map";
+      }
+      const owner = grid.owner[command.tile]!;
+      if (owner === command.faction) return "can't fire at yourself";
+      if (isAllied(world, command.faction, owner)) return "can't fire at an ally";
+      const hasRoute = (g: number) => isCorona(world, g) || !!world.gridBodies[g];
+      if (silo.grid !== command.grid && (!hasRoute(silo.grid) || !hasRoute(command.grid))) {
+        return "no route";
+      }
+      return faction.solars < BALANCE.weapons[command.kind].cost ? "not enough Solars" : null;
+    }
     default:
       return "unknown command type"; // malformed input from outside
   }
 }
+
+/** Structures built with the `build` command (Sun Bases arrive by ship). */
+const BUILDABLE: readonly string[] = [
+  "spaceport",
+  "habitat",
+  "solarSiphon",
+  "shieldGenerator",
+  "orbitalDefense",
+  "launchSilo",
+] satisfies StructureKind[];
 
 const SIGNALS: readonly string[] = ["help", "attack", "peace"] satisfies SignalKind[];
 

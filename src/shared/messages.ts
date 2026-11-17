@@ -13,6 +13,8 @@ export interface MatchSetup {
   readonly playerName: string;
   /** Which nations and colonies play, and how smart they are (data/difficulty.ts). */
   readonly difficulty: Difficulty;
+  /** Dev builds only (`?solars=N` in the URL): the player's starting Solars. */
+  readonly devStartSolars?: number;
 }
 
 /** Client → worker. */

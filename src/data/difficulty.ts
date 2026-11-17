@@ -41,6 +41,14 @@ export interface AiProfile {
   readonly coordinated: boolean;
   /** Sends landers at enemy Solar Siphons and Sun Bases (capturing them with the tile). */
   readonly raidsSiphons: boolean;
+  /** 0–100: preference for Shield Generators and Orbital Defense Platforms. 0 = never. */
+  readonly defense: number;
+  /** 0–100: preference for Warships (guarding its siphons and worlds, hunting siphons). 0 = never. */
+  readonly warships: number;
+  /** 0–100: preference for Launch Silos, Kinetic Strikes and Antimatter Warheads. 0 = never. */
+  readonly weapons: number;
+  /** Fires Kinetic Strikes at enemy Solar Siphons (needs `weapons`). */
+  readonly strikesSiphons: boolean;
   /** Economy bonuses for the nation (100 = none). buildTimePct < 100 builds faster. */
   readonly bonus: {
     readonly growthPct: number;
@@ -74,6 +82,10 @@ function tiered(p: AiProfile): Record<NationTier, AiProfile> {
       builder: Math.floor(p.builder / 2),
       spacefaring: Math.floor(p.spacefaring / 4),
       raidsSiphons: false,
+      defense: Math.floor(p.defense / 2),
+      warships: 0,
+      weapons: 0,
+      strikesSiphons: false,
     },
   };
 }
@@ -102,6 +114,10 @@ export const DIFFICULTIES = {
       gangUpOnLeader: false,
       coordinated: false,
       raidsSiphons: false,
+      defense: 0,
+      warships: 0,
+      weapons: 0,
+      strikesSiphons: false,
       bonus: { growthPct: 75, incomePct: 100, buildTimePct: 100 },
     }),
   },
@@ -126,6 +142,10 @@ export const DIFFICULTIES = {
       gangUpOnLeader: false,
       coordinated: false,
       raidsSiphons: false,
+      defense: 30,
+      warships: 15,
+      weapons: 0,
+      strikesSiphons: false,
       bonus: { growthPct: 100, incomePct: 100, buildTimePct: 100 },
     }),
   },
@@ -150,6 +170,10 @@ export const DIFFICULTIES = {
       gangUpOnLeader: true,
       coordinated: false,
       raidsSiphons: false,
+      defense: 50,
+      warships: 40,
+      weapons: 40,
+      strikesSiphons: false,
       bonus: { growthPct: 115, incomePct: 115, buildTimePct: 100 },
     }),
   },
@@ -184,6 +208,10 @@ export const DIFFICULTIES = {
       gangUpOnLeader: true,
       coordinated: true,
       raidsSiphons: true,
+      defense: 70,
+      warships: 60,
+      weapons: 60,
+      strikesSiphons: true,
       bonus: { growthPct: 135, incomePct: 135, buildTimePct: 60 },
     }),
   },

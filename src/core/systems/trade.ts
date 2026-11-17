@@ -49,6 +49,7 @@ function launchFreighter(world: World, from: Structure, to: Structure): void {
     kind: "freighter",
     owner: from.owner,
     troops: 0,
+    hp: BALANCE.hp.freighter,
     fromGrid: from.grid,
     fromTile: from.tile,
     toGrid: to.grid,

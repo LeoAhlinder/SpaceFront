@@ -93,7 +93,10 @@ export class SimHost {
     };
     const world = createWorld(config, new Map(maps.map((m) => [m.id, m])));
     trackChanges(world);
-    this.playerId = addFaction(world, setup.playerName, "player").id;
+    const player = addFaction(world, setup.playerName, "player");
+    this.playerId = player.id;
+    // Dev builds only (?solars=N): a head start for play-testing late-game features.
+    if (setup.devStartSolars !== undefined) player.solars = setup.devStartSolars;
     const earth = maps.find((m) => m.id === "earth");
     if (earth) addNations(world, setup.difficulty, earth.regions);
     const homes = botHomes(world, setup.botCount, setup.seed);

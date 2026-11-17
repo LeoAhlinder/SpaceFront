@@ -3,6 +3,7 @@ import { NEUTRAL } from "../ids";
 import type { World } from "../world/world";
 import type { System } from "../tick";
 import { finishedCounts, weightedModifier } from "../world/modifiers";
+import { structuresOn } from "../world/structureIndex";
 import { inSpawnPhase } from "../world/world";
 import { siphonIncomeMilli } from "./corona";
 
@@ -38,8 +39,9 @@ function siphonsPerBand(world: World): number[][] | null {
   const corona = world.corona;
   if (!corona) return null;
   let counts: number[][] | null = null;
-  for (const s of world.structures) {
-    if (s.kind !== "solarSiphon" || s.buildTicksLeft > 0 || s.owner === NEUTRAL) continue;
+  for (const id of structuresOn(world, corona.id, "solarSiphon")) {
+    const s = world.structures[id]!;
+    if (s.buildTicksLeft > 0 || s.owner === NEUTRAL) continue;
     counts ??= world.factions.map(() => [0, 0, 0]);
     counts[s.owner]![corona.band(s.tile)]! += 1;
   }

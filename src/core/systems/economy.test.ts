@@ -154,6 +154,7 @@ describe("trade", () => {
       kind: "freighter",
       owner: F(1),
       troops: 0,
+      hp: 1,
       fromGrid: G(0),
       fromTile: 0,
       toGrid: G(0),

@@ -29,6 +29,8 @@ export function hashWorld(world: World): number {
     h.int(f.solarsMilli);
     h.int(f.tileCount);
     h.int(f.traitorUntil);
+    h.ints(f.owned);
+    h.ints(f.finished);
     const b = f.bonus;
     h.ints([b.growthPct, b.incomePct, b.buildTimePct, b.spawnRadius, b.startPopPct]);
   }
@@ -77,7 +79,11 @@ export function hashWorld(world: World): number {
     h.int(s.tile);
     h.int(s.buildTicksLeft);
     h.int(s.nextTradeTick);
+    h.int(s.readyTick);
+    h.int(s.hp);
+    h.int(s.destroyed ? 1 : 0);
   }
+  for (const perGrid of world.structureIndex) for (const ids of perGrid) h.ints(ids);
 
   h.int(world.nextShipId);
   h.int(world.ships.length);
@@ -86,6 +92,7 @@ export function hashWorld(world: World): number {
     h.string(ship.kind);
     h.int(ship.owner);
     h.int(ship.troops);
+    h.int(ship.hp);
     h.int(ship.fromGrid);
     h.int(ship.fromTile);
     h.int(ship.toGrid);
@@ -99,6 +106,13 @@ export function hashWorld(world: World): number {
       h.int(p.y);
     }
   }
+  h.int(world.warships.length);
+  for (const w of world.warships) {
+    h.ints([w.id, w.owner, w.x, w.y, w.patrolX, w.patrolY, w.guardGrid, w.wayX, w.wayY, w.hp]);
+  }
+  h.int(world.fallout.length);
+  for (const f of world.fallout) h.ints([f.grid, f.tile, f.radius, f.untilTick]);
+
   h.int(world.bots.length);
   for (const b of world.bots) {
     h.int(b.faction);
@@ -113,6 +127,7 @@ export function hashWorld(world: World): number {
     h.int(n.tier);
     const p = n.profile;
     h.ints([p.aggression, p.builder, p.spacefaring, p.loyalty, p.reactionTicks, p.maxAttacks]);
+    h.ints([p.defense, p.warships, p.weapons, p.strikesSiphons ? 1 : 0]);
     h.int(n.home);
     h.int(n.homeGrid);
     h.int(n.spawnTile);
@@ -124,6 +139,7 @@ export function hashWorld(world: World): number {
     h.int(n.helpFrom);
     h.int(n.peaceFrom);
     h.int(n.calledTarget);
+    h.int(n.nextWarshipTick);
   }
 
   const d = world.diplomacy;

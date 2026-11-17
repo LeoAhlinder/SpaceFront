@@ -138,12 +138,15 @@ Status: checked as far as tests can (`tests/ai/difficulty.test.ts`, seed 42, 5 m
 
 ## M4 — Combat depth
 
-- ☐ **Warship**: patrol orders, spatial hash, attacks Landers, Freighters and siphons
-- ☐ **Shield Generator**, **Orbital Defense Platform**
-- ☐ **Launch Silo**, **Kinetic Strike**, **Antimatter Warhead** (with lasting irradiation); warnings to everyone
-- ☐ Effects: explosions, beams, weapon trails
-- ☐ Nation AI uses all of the above
-- ☐ Balance pass 2
+- ☑ **Warship**: patrol orders (a point in space, or guarding a world), spatial hash, attacks Landers, Freighters, Sun Base ships, other Warships and siphons
+- ☑ **Shield Generator**, **Orbital Defense Platform**
+- ☑ **Launch Silo**, **Kinetic Strike**, **Antimatter Warhead** (with lasting irradiation); warnings to everyone
+- ☑ Effects: explosions, beams, weapon trails
+- ☑ Nation AI uses all of the above
+- ☑ Balance pass 2
+- ☑ Structure index (per grid and kind, plus per-faction counts), so structure checks no longer scan every structure
+
+Status: every feature is covered by core tests (`systems/combat.test.ts`: shields, Kinetic Strikes, warheads and fallout, interception and salvos, Warships against landers, siphons and each other, determinism) and by the difficulty test (`tests/ai/difficulty.test.ts`): Easy uses none of it, Normal builds defenses, Hard and Impossible also build silos, buy Warships and fire both weapons, and only Impossible strikes siphons. Impossible costs ≈ 0.83 ms per tick at 10 minutes (≈ 3,100 structures), down from 0.85–1.1 ms before the structure index despite the new AI. Play-tested in the browser (Hard and Easy, with the dev-only `?solars=N` start): building all three structures, a Kinetic Strike and an Antimatter Warhead with their trails, target markers, impact and fallout, buying a Warship to guard Earth, selecting it (P) and sending it on patrol. Still to check by hand: how the weapons feel against real players, and whether warheads are too cheap or too dear.
 
 ---
 

@@ -6,6 +6,7 @@ import type { FactionId, GridId } from "../ids";
 import { NEUTRAL } from "../ids";
 import { Rng } from "../math/rng";
 import { buildCost, tooCloseToStructure } from "../systems/structures";
+import { firstOwned, KIND_CODE } from "../world/structureIndex";
 import type { System } from "../tick";
 import { refGrid, refTile } from "../world/tileRef";
 import type { BotState, Faction, World } from "../world/world";
@@ -65,7 +66,7 @@ function maybeBuild(world: World, bot: BotState, faction: Faction): Command | nu
     if (faction.solars < buildCost(world, bot.faction, kind, grid)) return null;
     return { type: "build", faction: bot.faction, kind, grid, tile };
   }
-  const hasPort = world.structures.some((s) => s.owner === bot.faction && s.kind === "spaceport");
+  const hasPort = faction.owned[KIND_CODE.spaceport]! > 0;
   for (const kind of ["spaceport", "habitat"] as const) {
     if (kind === "spaceport" && hasPort) continue;
     const chance = kind === "spaceport" ? B.buildPortChancePct : B.buildHabitatChancePct;
@@ -83,12 +84,8 @@ function maybeBuild(world: World, bot: BotState, faction: Faction): Command | nu
 function maybeSendSunBase(world: World, bot: BotState, faction: Faction): Command | null {
   const corona = world.corona;
   if (!corona || !bot.rng.chance(B.sunBaseChancePct, 100)) return null;
-  let port = -1;
-  for (const s of world.structures) {
-    if (s.owner !== bot.faction) continue;
-    if (s.kind === "sunBase") return null;
-    if (s.kind === "spaceport" && s.buildTicksLeft === 0 && port < 0) port = s.id;
-  }
+  if (faction.owned[KIND_CODE.sunBase]! > 0) return null;
+  const port = firstOwned(world, bot.faction, "spaceport", true)?.id ?? -1;
   for (const ship of world.ships) {
     if (ship.owner === bot.faction && ship.kind === "sunBaseShip") return null;
   }

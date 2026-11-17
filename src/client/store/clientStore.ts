@@ -1,5 +1,6 @@
 import { signal } from "@preact/signals";
 import type {
+  CombatEffect,
   Difficulty,
   DiplomacySnapshot,
   FactionKind,
@@ -27,8 +28,54 @@ const OWNABLE_MIN = 2;
 export type Phase = "menu" | "loading" | "playing" | "ended";
 export type ViewState =
   { readonly kind: "system" } | { readonly kind: "planet"; readonly grid: number };
-/** What a click on a map does besides spawning/attacking: build something, or launch. */
-export type Mode = "none" | "spaceport" | "habitat" | "launch" | "sunBase" | "solarSiphon";
+/** What a click on a map does besides spawning/attacking: build, launch, or fire. */
+export type Mode =
+  | "none"
+  | "spaceport"
+  | "habitat"
+  | "launch"
+  | "sunBase"
+  | "solarSiphon"
+  | "shieldGenerator"
+  | "orbitalDefense"
+  | "launchSilo"
+  | "warship"
+  | "kineticStrike"
+  | "antimatterWarhead";
+
+/** Must match core's WARSHIP_STRIDE: id, owner, x, y, hp, guarded grid. */
+const WARSHIP_STRIDE = 6;
+/** How long effects stay on screen, in ticks. */
+const BEAM_TICKS = 3;
+const BLAST_TICKS = 8;
+const IMPACT_TICKS = 25;
+
+export interface WarshipView {
+  readonly id: number;
+  readonly owner: number;
+  /** Position at the previous and the latest tick, for smooth motion. */
+  readonly prevX: number;
+  readonly prevY: number;
+  readonly x: number;
+  readonly y: number;
+  readonly hp: number;
+  readonly guardGrid: number;
+}
+
+/** A shot, blast or weapon impact being drawn, from `tick` until `untilTick`. */
+export interface EffectView {
+  readonly effect: CombatEffect;
+  readonly tick: number;
+  readonly untilTick: number;
+}
+
+/** Irradiated land: drawn until it fades. */
+export interface FalloutView {
+  readonly grid: number;
+  readonly tile: number;
+  readonly radius: number;
+  readonly untilTick: number;
+}
 
 export interface FactionView {
   readonly id: number;
@@ -95,6 +142,13 @@ export const ui = {
   mode: signal<Mode>("none"),
   /** The player's finished Spaceports and Sun Bases (can launch). */
   readyPorts: signal(0),
+  /** The player's finished Launch Silos, and how many of them are loaded. */
+  silos: signal(0),
+  loadedSilos: signal(0),
+  /** The player's Warships. */
+  warships: signal(0),
+  /** The player's Warship that the next click in the system view sends on patrol, or null. */
+  selectedWarship: signal<number | null>(null),
   alerts: signal<readonly Alert[]>([]),
   /** Percent of troops sent per attack or launch (client-side setting). */
   attackRatioPct: signal(30),
@@ -123,6 +177,9 @@ export const view = {
   ownable: [] as number[],
   structures: new Map<number, StructureView>(),
   ships: new Map<number, ShipView>(),
+  warships: new Map<number, WarshipView>(),
+  effects: [] as EffectView[],
+  fallout: [] as FalloutView[],
   /** When the last tick arrived (performance.now()), for smooth motion between ticks. */
   lastTickAt: 0,
   /** Allied pairs (low × 65536 + high) and embargoes (from × 65536 + to). */
@@ -175,6 +232,9 @@ function applyInit(init: MatchInit): void {
   view.ownerCounts = view.owners.map(() => new Map<number, number>());
   view.structures = new Map();
   view.ships = new Map();
+  view.warships = new Map();
+  view.effects = [];
+  view.fallout = [];
   view.factions = new Map(
     init.factions.map((f) => [
       f.id,
@@ -203,6 +263,10 @@ function applyInit(init: MatchInit): void {
   ui.alerts.value = [];
   ui.mode.value = "none";
   ui.readyPorts.value = 0;
+  ui.silos.value = 0;
+  ui.loadedSilos.value = 0;
+  ui.warships.value = 0;
+  ui.selectedWarship.value = null;
   const earth = init.grids.findIndex((g) => g.bodyId === "earth");
   ui.view.value = { kind: "planet", grid: Math.max(0, earth) };
   ui.phase.value = "playing";
@@ -238,13 +302,15 @@ function applyDelta(delta: TickDelta): void {
   if (delta.diplomacy) applySnapshot(delta.diplomacy);
   for (const e of delta.events) applyEvent(e, delta.tick);
   if (delta.events.length > 0 || hasExpired(delta.tick)) publishRelations(delta.tick);
-  for (const s of delta.structures) view.structures.set(s.id, s);
-  if (delta.structures.length > 0) {
-    const me = view.init?.playerId;
-    ui.readyPorts.value = [...view.structures.values()].filter(
-      (s) => s.owner === me && isPortKind(s.kind) && s.buildTicksLeft === 0,
-    ).length;
+  for (const s of delta.structures) {
+    if (s.destroyed) view.structures.delete(s.id);
+    else view.structures.set(s.id, s);
   }
+  if (delta.structures.length > 0 || delta.tick % 10 === 0) countStructures(delta.tick);
+  applyWarships(delta.warships);
+  for (const effect of delta.effects) addEffect(effect, delta.tick);
+  if (view.effects.length > 0) view.effects = view.effects.filter((e) => e.untilTick > delta.tick);
+  if (view.fallout.length > 0) view.fallout = view.fallout.filter((f) => f.untilTick > delta.tick);
   for (const ship of delta.shipsLaunched) {
     view.ships.set(ship.id, ship);
     alertForLaunch(ship, delta.tick);
@@ -264,6 +330,73 @@ function applyDelta(delta: TickDelta): void {
     ui.phase.value = "ended";
   }
   publishFactions();
+}
+
+/** Recounts the player's launch-ready ports and loaded silos. */
+function countStructures(tick: number): void {
+  const me = view.init?.playerId;
+  let ports = 0;
+  let silos = 0;
+  let loaded = 0;
+  for (const s of view.structures.values()) {
+    if (s.owner !== me || s.buildTicksLeft > 0) continue;
+    if (isPortKind(s.kind)) ports++;
+    if (s.kind === "launchSilo") {
+      silos++;
+      if (s.readyTick <= tick) loaded++;
+    }
+  }
+  ui.readyPorts.value = ports;
+  ui.silos.value = silos;
+  ui.loadedSilos.value = loaded;
+}
+
+function applyWarships(flat: Int32Array): void {
+  const next = new Map<number, WarshipView>();
+  const me = view.init?.playerId;
+  let mine = 0;
+  for (let i = 0; i < flat.length; i += WARSHIP_STRIDE) {
+    const id = flat[i]!;
+    const old = view.warships.get(id);
+    const owner = flat[i + 1]!;
+    const x = flat[i + 2]!;
+    const y = flat[i + 3]!;
+    if (owner === me) mine++;
+    next.set(id, {
+      id,
+      owner,
+      prevX: old?.x ?? x,
+      prevY: old?.y ?? y,
+      x,
+      y,
+      hp: flat[i + 4]!,
+      guardGrid: flat[i + 5]!,
+    });
+  }
+  view.warships = next;
+  if (ui.warships.value !== mine) ui.warships.value = mine;
+  const selected = ui.selectedWarship.value;
+  if (selected !== null && !next.has(selected)) ui.selectedWarship.value = null;
+}
+
+function addEffect(effect: CombatEffect, tick: number): void {
+  const life =
+    effect.kind === "beam" ? BEAM_TICKS : effect.kind === "blast" ? BLAST_TICKS : IMPACT_TICKS;
+  view.effects.push({ effect, tick, untilTick: tick + life });
+  if (effect.kind === "impact" && effect.weapon === "antimatterWarhead") {
+    view.fallout.push({
+      grid: effect.grid,
+      tile: effect.tile,
+      radius: effect.radius,
+      untilTick: tick + BALANCE.weapons.antimatterWarhead.falloutTicks,
+    });
+  }
+}
+
+/** True if the player holds land on this grid. */
+function holdsLand(grid: number): boolean {
+  const me = view.init?.playerId;
+  return me !== undefined && (view.ownerCounts[grid]?.get(me) ?? 0) > 0;
 }
 
 /** Spaceports and Sun Bases launch ships and trade. */
@@ -309,6 +442,9 @@ export function ownedCount(kind: string): number {
     for (const ship of view.ships.values()) {
       if (ship.owner === me && ship.kind === "sunBaseShip") n++;
     }
+  }
+  if (kind === "warship") {
+    for (const w of view.warships.values()) if (w.owner === me) n++;
   }
   return n;
 }
@@ -384,6 +520,24 @@ function applyEvent(e: GameEvent, tick: number): void {
     case "signal":
       if (e.to === me)
         pushNotice(strings.noticeSignal(name(e.from), e.signal, name(e.about)), tick);
+      break;
+    case "weaponLaunched": {
+      // Warheads are announced to everyone; Kinetic Strikes only where you hold land.
+      if (e.by === me || (e.weapon !== "antimatterWarhead" && !holdsLand(e.grid))) break;
+      const seconds = Math.max(0, Math.round((e.arriveTick - tick) / 10));
+      const weapon = strings.weaponNames[e.weapon];
+      pushAlert(strings.alertWeapon(name(e.by), weapon, worldName(e.grid), seconds), e.grid, tick);
+      break;
+    }
+    case "weaponIntercepted":
+      if (e.by === me || e.owner === me) {
+        pushNotice(strings.noticeIntercepted(strings.weaponNames[e.weapon], name(e.by)), tick);
+      }
+      break;
+    case "weaponHit":
+      if (e.by !== me && holdsLand(e.grid)) {
+        pushNotice(strings.noticeWeaponHit(strings.weaponNames[e.weapon], worldName(e.grid)), tick);
+      }
       break;
     case "independent":
       if (me !== undefined && (isAlly(me, e.colony) || isAlly(me, e.home))) {

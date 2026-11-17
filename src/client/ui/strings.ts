@@ -106,4 +106,40 @@ export const strings = {
         ? `${name}: Attack ${about}!`
         : `${name}: Peace?`,
   noticeIndependent: (name: string) => `${name} declared independence`,
+
+  // Combat (M4)
+  buildShield: (key: string) => `Shield (${key})`,
+  shieldInfo: "Attacks on your land within 10 steps cost the attacker twice the troops",
+  shieldHint: "Click your own land near a border to place a Shield Generator · Esc to cancel",
+  buildOrbitalDefense: (key: string) => `Orbital Def. (${key})`,
+  orbitalDefenseInfo:
+    "Shoots down incoming warheads near this world and damages enemy landers and Warships",
+  orbitalDefenseHint: "Click your own land on the world to defend · Esc to cancel",
+  buildLaunchSilo: (key: string) => `Silo (${key})`,
+  launchSiloInfo: "Fires Kinetic Strikes and Antimatter Warheads; reloads for 30 s after each",
+  launchSiloHint: "Click your own land to place a Launch Silo · Esc to cancel",
+  launchWarship: (key: string) => `Warship (${key})`,
+  warshipInfo:
+    "Patrols an area of space and shoots enemy landers, Freighters, Sun Base ships, Warships and Solar Siphons",
+  warshipHint:
+    "System view: click a world to guard it, or empty space to patrol there · Esc to cancel",
+  patrolHint:
+    "Warship selected: click a world to guard it, or empty space to patrol there · Esc to cancel",
+  nextWarship: (key: string) => `Next warship (${key})`,
+  fireKinetic: (key: string) => `Kinetic (${key})`,
+  kineticInfo: "Cheap: destroys structures and kills troops within 2 steps",
+  kineticHint: "Click an enemy target on any map (the Corona too) · Esc to cancel",
+  fireAntimatter: (key: string) => `Antimatter (${key})`,
+  antimatterInfo:
+    "Wipes all territory within 10 steps and leaves it irradiated for 5 minutes · everyone is warned",
+  antimatterHint: "Click enemy land on any map · everyone will be warned · Esc to cancel",
+  needSilo: "Build a Launch Silo and wait for it to finish (and reload)",
+  weaponNames: { kineticStrike: "Kinetic Strike", antimatterWarhead: "Antimatter Warhead" },
+  alertWeapon: (by: string, weapon: string, world: string, seconds: number) =>
+    `⚠ ${by} fired an ${weapon} at ${world} (${seconds}s)`,
+  noticeIntercepted: (weapon: string, by: string) =>
+    `${by}'s Orbital Defense shot down a ${weapon}`,
+  noticeWeaponHit: (weapon: string, world: string) => `A ${weapon} hit ${world}`,
+  warshipsStat: (n: number) => `${n}`,
+  warships: "Warships",
 };

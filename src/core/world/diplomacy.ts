@@ -1,7 +1,7 @@
 import { BALANCE } from "../../data/balance";
 import type { FactionId } from "../ids";
 import { NEUTRAL } from "../ids";
-import type { World } from "./world";
+import type { WeaponKind, World } from "./world";
 
 /**
  * Who is allied with whom, pending alliance requests and embargoes
@@ -43,7 +43,31 @@ export type GameEvent =
       readonly about: number;
     }
   /** A colony broke away from its home nation. */
-  | { readonly kind: "independent"; readonly colony: number; readonly home: number };
+  | { readonly kind: "independent"; readonly colony: number; readonly home: number }
+  /** A weapon was fired: everyone is warned (GAMEPLAY_PLAN.md §8). */
+  | {
+      readonly kind: "weaponLaunched";
+      readonly by: number;
+      readonly weapon: WeaponKind;
+      readonly grid: number;
+      readonly tile: number;
+      readonly arriveTick: number;
+    }
+  /** Orbital Defense (owned by `by`) shot down a weapon of `owner`. */
+  | {
+      readonly kind: "weaponIntercepted";
+      readonly by: number;
+      readonly owner: number;
+      readonly weapon: WeaponKind;
+      readonly grid: number;
+    }
+  | {
+      readonly kind: "weaponHit";
+      readonly by: number;
+      readonly weapon: WeaponKind;
+      readonly grid: number;
+      readonly tile: number;
+    };
 
 export function createDiplomacy(): Diplomacy {
   return { alliances: new Set(), requests: new Map(), embargoes: new Set() };

@@ -88,6 +88,13 @@ export interface Faction {
   readonly bonus: FactionBonus;
   /** Marked as a traitor (for breaking an alliance) until this tick; 0 = never. */
   traitorUntil: number;
+  /**
+   * Structures owned per kind (STRUCTURE_KINDS index), finished or not, and
+   * the finished ones. Kept in sync with `world.structures` by
+   * world/structureIndex.ts, so build costs don't scan every structure.
+   */
+  readonly owned: number[];
+  readonly finished: number[];
 }
 
 /** Percent multipliers on a faction's economy (100 = normal). */
@@ -130,7 +137,18 @@ export interface Attack {
   readonly frontier: FrontierHeap;
 }
 
-export type StructureKind = "spaceport" | "habitat" | "sunBase" | "solarSiphon";
+/** Every structure kind, in a fixed order (their index is the kind's code). */
+export const STRUCTURE_KINDS = [
+  "spaceport",
+  "habitat",
+  "sunBase",
+  "solarSiphon",
+  "shieldGenerator",
+  "orbitalDefense",
+  "launchSilo",
+] as const;
+
+export type StructureKind = (typeof STRUCTURE_KINDS)[number];
 
 /** A building on a map. Captured along with its tile. */
 export interface Structure {
@@ -143,16 +161,31 @@ export interface Structure {
   buildTicksLeft: number;
   /** Spaceports and Sun Bases: the tick its next Freighter leaves (-1 until finished). */
   nextTradeTick: number;
+  /** Launch Silos: the tick it can fire again. Orbital Defense: the tick it can shoot again. */
+  readyTick: number;
+  /** Hit points (only Solar Siphons can be shot at; weapons destroy any structure). */
+  hp: number;
+  /**
+   * Destroyed by a weapon or Warship. Ids are array indexes, so a destroyed
+   * structure stays in `world.structures` (owned by NEUTRAL, off the map).
+   */
+  destroyed: boolean;
 }
 
-export type ShipKind = "troopLander" | "freighter" | "sunBaseShip";
+export type WeaponKind = "kineticStrike" | "antimatterWarhead";
+
+/** Ships that fly a precomputed route and arrive. Weapons in flight are ships too. */
+export type ShipKind = "troopLander" | "freighter" | "sunBaseShip" | WeaponKind;
 
 /** A spacecraft in flight. Its whole route is planned at launch. */
 export interface Ship {
   readonly id: number;
   readonly kind: ShipKind;
   readonly owner: FactionId;
-  readonly troops: number;
+  /** Troops aboard; a damaged lander loses troops with its hit points. */
+  troops: number;
+  /** Hit points left (BALANCE.hp); at 0 it is destroyed. */
+  hp: number;
   readonly fromGrid: GridId;
   readonly fromTile: number;
   readonly toGrid: GridId;
@@ -166,6 +199,54 @@ export interface Ship {
 }
 
 /**
+ * A Warship: moves freely through space (it has no route), patrols an area
+ * and shoots hostile ships and Solar Siphons (systems/combat.ts). Positions
+ * are integer space units.
+ */
+export interface Warship {
+  readonly id: number;
+  readonly owner: FactionId;
+  x: number;
+  y: number;
+  /** Center of the patrol area: a fixed point, or the guarded world's position. */
+  patrolX: number;
+  patrolY: number;
+  /** A grid whose body it guards (the patrol area follows the body), or -1. */
+  guardGrid: number;
+  /** Where it is heading right now. */
+  wayX: number;
+  wayY: number;
+  hp: number;
+}
+
+/** Irradiated land left by an Antimatter Warhead (slow to retake, no building). */
+export interface Fallout {
+  readonly grid: GridId;
+  readonly tile: number;
+  readonly radius: number;
+  readonly untilTick: number;
+}
+
+/** Something to draw for a moment: a shot, a ship blowing up, a weapon impact. Never hashed. */
+export type CombatEffect =
+  | {
+      readonly kind: "beam";
+      readonly owner: number;
+      readonly fromX: number;
+      readonly fromY: number;
+      readonly toX: number;
+      readonly toY: number;
+    }
+  | { readonly kind: "blast"; readonly x: number; readonly y: number; readonly size: number }
+  | {
+      readonly kind: "impact";
+      readonly weapon: WeaponKind;
+      readonly grid: number;
+      readonly tile: number;
+      readonly radius: number;
+    };
+
+/**
  * What changed since the host last drained it (see core/delta). Null on the
  * world means nobody is listening, so nothing is recorded. Not game state:
  * never hashed or saved.
@@ -177,11 +258,12 @@ export interface ChangeLog {
   readonly shipsLanded: number[];
   /** Diplomacy and other events for the UI, in the order they happened. */
   readonly events: GameEvent[];
+  /** Shots, blasts and impacts to draw. */
+  readonly effects: CombatEffect[];
 }
 
 /**
  * The complete simulation state: the single source of truth (ARCHITECTURE.md §4.3).
- * Combat units are added by the milestone that needs them (M4).
  */
 export interface World {
   /** Number of ticks completed so far. */
@@ -211,13 +293,23 @@ export interface World {
   nextAttackId: number;
   /** Body id per grid (null for maps outside the solar system, e.g. in tests). */
   readonly gridBodies: readonly (string | null)[];
-  /** All structures; a structure's id is its index. */
+  /** All structures; a structure's id is its index (destroyed ones stay). */
   readonly structures: Structure[];
   /** Per grid, per tile: id of the structure there, or -1. */
   readonly structureAt: Int32Array[];
+  /**
+   * Per grid, per structure kind (STRUCTURE_KINDS index): ids of the
+   * structures there, in id order. Derived from `structures` (see
+   * world/structureIndex.ts), so lookups don't scan every structure.
+   */
+  readonly structureIndex: number[][][];
   /** Ships in flight, in launch order. */
   ships: Ship[];
+  /** Warships in space, in launch order. They share ship ids. */
+  warships: Warship[];
   nextShipId: number;
+  /** Irradiated areas, oldest first. */
+  fallout: Fallout[];
   /** Commands waiting for their tick. */
   readonly pending: CommandQueue;
   /** Ownable land tiles across all body grids (not the Corona), for the win condition. */
@@ -258,8 +350,11 @@ export function createWorld(
     gridBodies: config.bodies.map((b) => b.bodyId ?? null),
     structures: [],
     structureAt: all.map((g) => new Int32Array(g.size).fill(-1)),
+    structureIndex: all.map(() => STRUCTURE_KINDS.map(() => [])),
     ships: [],
+    warships: [],
     nextShipId: 1,
+    fallout: [],
     pending: new CommandQueue(),
     ownableTiles: grids.reduce((sum, g) => sum + countOwnable(g), 0),
     winner: null,
@@ -351,6 +446,8 @@ export function addFaction(world: World, name: string, kind: FactionKind): Facti
     troopRatioPct: BALANCE.population.defaultTroopRatioPct,
     bonus: { growthPct: 100, incomePct: 100, buildTimePct: 100, spawnRadius: 0, startPopPct: 100 },
     traitorUntil: 0,
+    owned: STRUCTURE_KINDS.map(() => 0),
+    finished: STRUCTURE_KINDS.map(() => 0),
   };
   world.factions.push(faction);
   return faction;

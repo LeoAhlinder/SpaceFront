@@ -1,6 +1,7 @@
 import type { TileGrid } from "../grid/tileGrid";
 import type { FactionId } from "../ids";
 import { NEUTRAL } from "../ids";
+import { transferStructure } from "./structureIndex";
 import { refGrid, refTile, tileRef } from "./tileRef";
 import type { World } from "./world";
 
@@ -15,10 +16,7 @@ export function setOwner(world: World, grid: TileGrid, tile: number, newOwner: F
   world.log?.tiles.push(tileRef(grid.id, tile));
   // Structures change hands with their tile.
   const structure = world.structureAt[grid.id]![tile]!;
-  if (structure >= 0) {
-    world.structures[structure]!.owner = newOwner;
-    world.log?.structures.push(structure);
-  }
+  if (structure >= 0) transferStructure(world, world.structures[structure]!, newOwner);
   const slots = world.tileSlots[grid.id]!;
   if (oldOwner !== NEUTRAL) {
     // Swap-remove the tile from the loser's list.

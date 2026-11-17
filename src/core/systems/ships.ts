@@ -12,6 +12,7 @@ import { beginAttack, extendFrontiers } from "./attack";
 import { foundSunBase } from "./corona";
 import { buildCost } from "./structures";
 import { deliver } from "./trade";
+import { impact } from "./weapons";
 
 const S = BALANCE.ships;
 
@@ -86,6 +87,7 @@ export function applyLaunch(world: World, command: LaunchCommand): string | null
     kind: command.kind,
     owner: command.faction,
     troops,
+    hp: BALANCE.hp[command.kind],
     fromGrid: port.grid,
     fromTile: port.tile,
     toGrid: command.toGrid,
@@ -112,7 +114,8 @@ export const shipSystem: System = (world, ctx) => {
     }
     if (ship.kind === "freighter") deliver(world, ship);
     else if (ship.kind === "sunBaseShip") foundSunBase(world, ship);
-    else land(world, ship);
+    else if (ship.kind === "troopLander") land(world, ship);
+    else impact(world, ship);
     world.log?.shipsLanded.push(ship.id);
   }
   world.ships = flying;

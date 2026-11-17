@@ -1,5 +1,6 @@
 import type { WorldModifiers } from "../../data/bodies";
 import { modifierOf, SOLAR_SYSTEM } from "../../data/bodies";
+import { KIND_CODE } from "./structureIndex";
 import type { Faction, StructureKind, World } from "./world";
 import { isCorona, landTiles } from "./world";
 
@@ -33,9 +34,6 @@ export function weightedModifier(
 
 /** Finished structures of a kind per faction (index = FactionId). */
 export function finishedCounts(world: World, kind: StructureKind): number[] {
-  const counts = new Array<number>(world.factions.length).fill(0);
-  for (const s of world.structures) {
-    if (s.kind === kind && s.buildTicksLeft === 0) counts[s.owner] = counts[s.owner]! + 1;
-  }
-  return counts;
+  const code = KIND_CODE[kind];
+  return world.factions.map((f) => f.finished[code]!);
 }

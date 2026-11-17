@@ -1,5 +1,6 @@
 import { Container, Graphics } from "pixi.js";
 import type { MatchInit } from "../../shared/messages";
+import { BALANCE } from "../../data/balance";
 import { view } from "../store/clientStore";
 import { Camera } from "./camera";
 import { terrainPalette } from "./colors";
@@ -89,13 +90,42 @@ export class PlanetScene {
       const color = view.factions.get(s.owner)?.color ?? 0xffffff;
       const alpha = s.buildTicksLeft > 0 ? 0.45 : 1;
       const outline = { width: Math.max(0.3, 1.5 * px), color: 0xffffff };
+      const half = PORT_SIZE / 2;
       if (s.kind === "spaceport") {
         // A square with a dot: the launch pad.
-        const half = PORT_SIZE / 2;
         g.rect(p.x - half, p.y - half, PORT_SIZE, PORT_SIZE)
           .fill({ color, alpha })
           .stroke(outline);
         g.circle(p.x, p.y, PORT_SIZE / 5).fill(0xffffff);
+      } else if (s.kind === "shieldGenerator") {
+        // A hexagon, and the area it protects.
+        const pts: number[] = [];
+        for (let i = 0; i < 6; i++) {
+          pts.push(
+            p.x + Math.cos((i * Math.PI) / 3) * half,
+            p.y + Math.sin((i * Math.PI) / 3) * half,
+          );
+        }
+        g.poly(pts).fill({ color, alpha }).stroke(outline);
+        if (s.buildTicksLeft === 0) {
+          diamond(g, p.x, p.y, BALANCE.shield.radius + 0.5);
+          g.stroke({ width: px, color: 0x8fd8ff, alpha: 0.5 });
+        }
+      } else if (s.kind === "orbitalDefense") {
+        // A diamond with a cross-hair: the gun platform.
+        diamond(g, p.x, p.y, half);
+        g.fill({ color, alpha }).stroke(outline);
+        g.moveTo(p.x - half, p.y)
+          .lineTo(p.x + half, p.y)
+          .moveTo(p.x, p.y - half)
+          .lineTo(p.x, p.y + half)
+          .stroke({ width: Math.max(0.2, px), color: 0xffffff });
+      } else if (s.kind === "launchSilo") {
+        // A triangle with a hot core: the silo.
+        g.poly([p.x, p.y - half, p.x + half, p.y + half, p.x - half, p.y + half])
+          .fill({ color, alpha })
+          .stroke(outline);
+        g.circle(p.x, p.y + half / 3, PORT_SIZE / 7).fill(s.readyTick <= t ? 0xff5a3c : 0x777777);
       } else {
         // A dome: the Habitat.
         g.circle(p.x, p.y, PORT_SIZE / 2.2)
@@ -105,11 +135,67 @@ export class PlanetScene {
       }
     }
 
+    // Irradiated land, faded by how long it has left.
+    for (const f of view.fallout) {
+      if (f.grid !== this.active) continue;
+      const p = toWorld(f.tile);
+      const left = Math.min(1, (f.untilTick - t) / BALANCE.weapons.antimatterWarhead.falloutTicks);
+      diamond(g, p.x, p.y, f.radius + 0.5);
+      g.fill({ color: 0x9cff3c, alpha: 0.1 + 0.2 * left }).stroke({
+        width: px,
+        color: 0x9cff3c,
+        alpha: 0.6 * left,
+      });
+    }
+
+    // Weapon impacts: a flash that grows to the blast radius and fades.
+    for (const e of view.effects) {
+      const fx = e.effect;
+      if (fx.kind !== "impact" || fx.grid !== this.active) continue;
+      const age = (t - e.tick) / Math.max(1, e.untilTick - e.tick);
+      if (age < 0 || age > 1) continue;
+      const p = toWorld(fx.tile);
+      diamond(g, p.x, p.y, (fx.radius + 0.5) * Math.min(1, age * 3) + 1);
+      g.fill({ color: 0xfff1c0, alpha: 0.85 * (1 - age) }).stroke({
+        width: 2 * px,
+        color: 0xff5a3c,
+        alpha: 1 - age,
+      });
+    }
+
     // Landers hopping across this map, and landers arriving from space.
     for (const ship of view.ships.values()) {
       if (ship.toGrid !== this.active) continue;
       const color = view.factions.get(ship.owner)?.color ?? 0xffffff;
       const target = toWorld(ship.toTile);
+      if (ship.kind === "kineticStrike" || ship.kind === "antimatterWarhead") {
+        // Incoming weapon: the area it will hit, pulsing, and the strike itself on a hop.
+        const radius = BALANCE.weapons[ship.kind].radius + 0.5;
+        const pulse = 0.5 + 0.5 * Math.sin(t * 1.5);
+        diamond(g, target.x, target.y, radius);
+        g.fill({ color: 0xff3c3c, alpha: 0.08 + 0.1 * pulse }).stroke({
+          width: 1.5 * px,
+          color: 0xff3c3c,
+          alpha: 0.6 + 0.4 * pulse,
+        });
+        if (ship.fromGrid === this.active) {
+          const from = toWorld(ship.fromTile);
+          const f = Math.min(
+            1,
+            Math.max(0, (t - ship.launchTick) / (ship.arriveTick - ship.launchTick)),
+          );
+          const x = from.x + (target.x - from.x) * f;
+          const y = from.y + (target.y - from.y) * f;
+          g.moveTo(
+            from.x + (target.x - from.x) * Math.max(0, f - 0.15),
+            from.y + (target.y - from.y) * Math.max(0, f - 0.15),
+          )
+            .lineTo(x, y)
+            .stroke({ width: 2 * px, color: 0xff5a3c, alpha: 0.7 });
+          g.circle(x, y, Math.max(0.8, 3 * px)).fill(0xfff1c0);
+        }
+        continue;
+      }
       if (ship.fromGrid === this.active) {
         const from = toWorld(ship.fromTile);
         const f = Math.min(
@@ -143,4 +229,9 @@ export class PlanetScene {
     const tile = layer.tileAt(p.x, p.y);
     return tile < 0 ? null : { grid: this.active, tile };
   }
+}
+
+/** Starts a diamond path (a Manhattan circle, the shape of a radius on a map) of half-size r. */
+function diamond(g: Graphics, x: number, y: number, r: number): Graphics {
+  return g.poly([x, y - r, x + r, y, x, y + r, x - r, y]);
 }

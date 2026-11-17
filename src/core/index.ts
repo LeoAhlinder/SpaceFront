@@ -13,15 +13,25 @@ export type {
   BuildCommand,
   Command,
   EmbargoCommand,
+  FireWeaponCommand,
   GiftCommand,
   LaunchCommand,
+  LaunchWarshipCommand,
+  PatrolArea,
+  PatrolCommand,
   SetRatioCommand,
   SignalCommand,
   SpawnCommand,
 } from "./commands/commands";
 export { validateCommand } from "./commands/validate";
 export { TICK_MS } from "./constants";
-export { diplomacySnapshot, drainDelta, FACTION_STATS_STRIDE, trackChanges } from "./delta/delta";
+export {
+  diplomacySnapshot,
+  drainDelta,
+  FACTION_STATS_STRIDE,
+  trackChanges,
+  WARSHIP_STRIDE,
+} from "./delta/delta";
 export type { DiplomacySnapshot, ShipView, StructureView, TickDelta } from "./delta/delta";
 export { assert, AssertionError } from "./debug";
 export { Band, BAND_KEYS, PolarGrid } from "./grid/polarGrid";
@@ -44,9 +54,29 @@ export {
   isqrt,
   pathLength,
   planFlight,
+  pointAlong,
+  stepToward,
 } from "./space/space";
 export type { Endpoint, Flight, Point } from "./space/space";
-export { attackSystem, beginAttack, startAttack } from "./systems/attack";
+export { attackSystem, beginAttack, isShielded, startAttack } from "./systems/attack";
+export {
+  applyLaunchWarship,
+  applyPatrol,
+  combatSystem,
+  shipPosition,
+  warshipCost,
+} from "./systems/combat";
+export { applyFireWeapon, impact, isIrradiated } from "./systems/weapons";
+export { tilesWithin } from "./grid/area";
+export { SpatialHash } from "./space/spatialHash";
+export {
+  addStructure,
+  destroyStructure,
+  firstOwned,
+  KIND_CODE,
+  ownedOfKind,
+  structuresOn,
+} from "./world/structureIndex";
 export { coronaSystem, foundSunBase, siphonIncomeMilli } from "./systems/corona";
 export { applyLaunch, endpointOf, planRoute, shipSystem } from "./systems/ships";
 export type { Route } from "./systems/ships";
@@ -82,6 +112,7 @@ export {
   addFaction,
   addTroops,
   coronaTiles,
+  STRUCTURE_KINDS,
   createWorld,
   gridOf,
   inSpawnPhase,
@@ -94,14 +125,18 @@ export type {
   BodyConfig,
   BotState,
   ChangeLog,
+  CombatEffect,
   Difficulty,
   Faction,
   FactionBonus,
   FactionKind,
+  Fallout,
   MatchConfig,
   Ship,
   ShipKind,
   Structure,
   StructureKind,
+  Warship,
+  WeaponKind,
   World,
 } from "./world/world";

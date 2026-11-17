@@ -193,3 +193,43 @@ function detourPoint(p: Point, q: Point, c: Point, closest: Point, r: number): P
   const reach = Math.floor((r * BALANCE.ships.avoidMarginPct) / 100);
   return { x: c.x + Math.floor((vx * reach) / len), y: c.y + Math.floor((vy * reach) / len) };
 }
+
+/**
+ * The point `done / total` of the way along a polyline (by length), in
+ * integer space units. Clamped to the ends.
+ */
+export function pointAlong(points: readonly Point[], done: number, total: number): Point {
+  const first = points[0]!;
+  if (points.length < 2 || total <= 0 || done <= 0) return first;
+  if (done >= total) return points[points.length - 1]!;
+  let left = Math.floor((pathLength(points) * done) / total);
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i - 1]!;
+    const q = points[i]!;
+    const len = distance(p, q);
+    if (left <= len) {
+      if (len === 0) return p;
+      return {
+        x: p.x + Math.trunc(((q.x - p.x) * left) / len),
+        y: p.y + Math.trunc(((q.y - p.y) * left) / len),
+      };
+    }
+    left -= len;
+  }
+  return points[points.length - 1]!;
+}
+
+/**
+ * Moves `from` up to `step` units toward `to`. Returns the new point (`to`
+ * itself once within reach).
+ */
+export function stepToward(from: Point, to: Point, step: number): Point {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const len = isqrt(dx * dx + dy * dy);
+  if (len <= step) return to;
+  return {
+    x: from.x + Math.trunc((dx * step) / len),
+    y: from.y + Math.trunc((dy * step) / len),
+  };
+}

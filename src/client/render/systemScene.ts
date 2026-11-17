@@ -1,7 +1,8 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { SOLAR_SYSTEM } from "../../data/bodies";
 import type { MatchInit } from "../../shared/messages";
-import { mainOwner, view } from "../store/clientStore";
+import { BALANCE } from "../../data/balance";
+import { mainOwner, ui, view } from "../store/clientStore";
 import { Camera } from "./camera";
 import { BODY_COLORS, mix } from "./colors";
 import { CoronaLayer, coronaTileAt, coronaTileCenter } from "./coronaLayer";
@@ -14,6 +15,9 @@ const MIN_ICON_PX = 5;
 const LABEL_STYLE = { fill: 0xc8d2f0, fontSize: 12, fontFamily: "system-ui, sans-serif" };
 /** Corona structures are drawn this many space units wide (a ring is about 15). */
 const CORONA_STRUCTURE_SIZE = 14;
+/** A click this many screen pixels from one of your Warships selects it. */
+const WARSHIP_PICK_PX = 12;
+const WEAPON_COLOR = 0xff5a3c;
 
 /**
  * The solar-system view: the Sun, the Corona's territory around it, orbits,
@@ -119,12 +123,26 @@ export class SystemScene {
 
     this.drawCoronaStructures(g, px);
 
+    this.drawWarships(g, px, t);
+
     // Ships between worlds.
     for (const ship of view.ships.values()) {
       if (ship.waypoints.length === 0) continue;
       const f = (t - ship.launchTick) / Math.max(1, ship.arriveTick - ship.launchTick);
       const p = alongPath(ship.waypoints, f);
       const color = view.factions.get(ship.owner)?.color ?? 0xffffff;
+      if (ship.kind === "kineticStrike" || ship.kind === "antimatterWarhead") {
+        // A weapon: a hot streak with a fading trail behind it.
+        const big = ship.kind === "antimatterWarhead";
+        const back = alongPath(ship.waypoints, Math.max(0, f - 0.12));
+        g.moveTo(back.x, back.y)
+          .lineTo(p.x, p.y)
+          .stroke({ width: (big ? 3 : 2) * px, color: WEAPON_COLOR, alpha: 0.55 });
+        g.circle(p.x, p.y, (big ? 5 : 3) * px)
+          .fill(0xfff1c0)
+          .stroke({ width: px, color: WEAPON_COLOR });
+        continue;
+      }
       if (ship.owner === view.init?.playerId && ship.kind !== "freighter") {
         // Show the player's own lander and Sun Base ship routes.
         const end = ship.waypoints.length - 2;
@@ -147,6 +165,75 @@ export class SystemScene {
           .stroke({ width: px, color: 0x000000 });
       }
     }
+  }
+
+  /** Warships (triangles heading where they move), the selected one's patrol area, and effects. */
+  private drawWarships(g: Graphics, px: number, t: number): void {
+    const frac = Math.min(1, Math.max(0, t - ui.tick.value));
+    const me = view.init?.playerId;
+    const selected = ui.selectedWarship.value;
+    for (const w of view.warships.values()) {
+      const x = w.prevX + (w.x - w.prevX) * frac;
+      const y = w.prevY + (w.y - w.prevY) * frac;
+      const color = view.factions.get(w.owner)?.color ?? 0xffffff;
+      let dx = w.x - w.prevX;
+      let dy = w.y - w.prevY;
+      const len = Math.hypot(dx, dy) || 1;
+      dx = len === 1 && dx === 0 ? 1 : dx / len;
+      dy /= len;
+      const r = 7 * px;
+      g.poly([
+        x + dx * r * 1.4,
+        y + dy * r * 1.4,
+        x - dx * r - dy * r * 0.8,
+        y - dy * r + dx * r * 0.8,
+        x - dx * r + dy * r * 0.8,
+        y - dy * r - dx * r * 0.8,
+      ])
+        .fill(color)
+        .stroke({ width: px, color: w.owner === me ? 0xffffff : 0x000000 });
+      if (w.hp < BALANCE.hp.warship) {
+        const share = Math.max(0, w.hp / BALANCE.hp.warship);
+        g.rect(x - r, y + r * 1.3, 2 * r * share, 2 * px).fill(0x6be37a);
+      }
+      if (w.id === selected) {
+        g.circle(x, y, r * 2).stroke({ width: 1.5 * px, color: 0xffffff });
+        g.circle(x, y, BALANCE.warship.detectRange).stroke({ width: px, color, alpha: 0.4 });
+      }
+    }
+    for (const e of view.effects) {
+      const age = (t - e.tick) / Math.max(1, e.untilTick - e.tick);
+      if (age < 0 || age > 1) continue;
+      const fx = e.effect;
+      if (fx.kind === "beam") {
+        const color = view.factions.get(fx.owner)?.color ?? 0xffffff;
+        g.moveTo(fx.fromX, fx.fromY)
+          .lineTo(fx.toX, fx.toY)
+          .stroke({ width: 2 * px, color: mix(color, 0xffffff, 0.5), alpha: 1 - age });
+      } else if (fx.kind === "blast") {
+        g.circle(fx.x, fx.y, (6 + 14 * fx.size * age) * px).fill({
+          color: 0xffb040,
+          alpha: 0.8 * (1 - age),
+        });
+      }
+    }
+  }
+
+  /** The id of one of the player's Warships under a screen point, or null. */
+  ownWarshipAt(screenX: number, screenY: number): number | null {
+    const p = this.camera.screenToWorld(screenX, screenY);
+    const reach = WARSHIP_PICK_PX / this.camera.zoom;
+    let best: number | null = null;
+    let bestD = reach;
+    for (const w of view.warships.values()) {
+      if (w.owner !== view.init?.playerId) continue;
+      const d = Math.hypot(w.x - p.x, w.y - p.y);
+      if (d <= bestD) {
+        best = w.id;
+        bestD = d;
+      }
+    }
+    return best;
   }
 
   /** Sun Bases and Solar Siphons, drawn on their Corona tiles. */

@@ -11,7 +11,15 @@
  */
 import { describe, expect, it } from "vitest";
 import type { Difficulty, World } from "../../src/core";
-import { drainDelta, hashWorld, landTiles, NEUTRAL, runTick, trackChanges } from "../../src/core";
+import {
+  drainDelta,
+  hashWorld,
+  landTiles,
+  NEUTRAL,
+  runTick,
+  trackChanges,
+  WARSHIP_STRIDE,
+} from "../../src/core";
 import { DIFFICULTIES, DIFFICULTY_IDS } from "../../src/data/difficulty";
 import { nationById } from "../../src/data/nations";
 import { addScriptedPlayer } from "../support/scriptedPlayer";
@@ -38,6 +46,15 @@ interface Result {
   alliances: number;
   betrayals: number;
   signals: number;
+  /** M4: defenses built, Warships bought, weapons fired by nations (and strikes at siphons). */
+  shields: number;
+  platforms: number;
+  silos: number;
+  warships: number;
+  kinetic: number;
+  antimatter: number;
+  siphonStrikes: number;
+  intercepted: number;
   playerLand: number;
   playerAlive: boolean;
   hashes: number[];
@@ -58,7 +75,17 @@ function play(difficulty: Difficulty, ticks = TICKS): Result {
     signals: 0,
     wars: 0,
     conquered: 0,
+    shields: 0,
+    platforms: 0,
+    silos: 0,
+    warships: 0,
+    kinetic: 0,
+    antimatter: 0,
+    siphonStrikes: 0,
+    intercepted: 0,
   };
+  const seenStructures = new Set<number>();
+  const seenWarships = new Set<number>();
   // Owners as of the last tick, to see whom each changed tile was taken from.
   const owners = [...world.grids.map((g) => g.owner.slice()), world.corona!.owner.slice()];
   const hashes: number[] = [];
@@ -87,7 +114,26 @@ function play(difficulty: Difficulty, ticks = TICKS): Result {
       r.landers++;
       if (s.toGrid === world.corona!.id) r.raids++;
     }
+    for (const sv of delta.structures) {
+      if (seenStructures.has(sv.id) || !nations.has(sv.owner)) continue;
+      seenStructures.add(sv.id);
+      if (sv.kind === "shieldGenerator") r.shields++;
+      if (sv.kind === "orbitalDefense") r.platforms++;
+      if (sv.kind === "launchSilo") r.silos++;
+    }
+    for (let i = 0; i < delta.warships.length; i += WARSHIP_STRIDE) {
+      const id = delta.warships[i]!;
+      if (seenWarships.has(id) || !nations.has(delta.warships[i + 1]!)) continue;
+      seenWarships.add(id);
+      r.warships++;
+    }
     for (const e of delta.events) {
+      if (e.kind === "weaponIntercepted") r.intercepted++;
+      if (e.kind === "weaponLaunched" && nations.has(e.by)) {
+        if (e.weapon === "antimatterWarhead") r.antimatter++;
+        else r.kinetic++;
+        if (e.grid === world.corona!.id) r.siphonStrikes++;
+      }
       if (e.kind === "allied") r.alliances++;
       if (e.kind === "allianceBroken" && nations.has(e.by)) r.betrayals++;
       if (e.kind === "signal" && nations.has(e.from)) r.signals++;
@@ -122,6 +168,9 @@ describe("AI-vs-AI matches per difficulty (3,000 ticks)", () => {
           `${r.conqueredPerNation.toFixed(0)} tiles conquered per nation, ` +
           `${r.landers} landers (${r.raids} raids), ${r.sunBaseShips} Sun Base ships, ` +
           `${r.alliances} alliances, ${r.betrayals} betrayals, ${r.signals} signals; ` +
+          `M4: ${r.shields} shields, ${r.platforms} platforms, ${r.silos} silos, ` +
+          `${r.warships} warships, ${r.kinetic} kinetic (${r.siphonStrikes} at siphons), ` +
+          `${r.antimatter} antimatter, ${r.intercepted} intercepted; ` +
           `player ${r.playerAlive ? "alive" : "dead"} with ${r.playerLand} tiles`,
       );
     }
@@ -173,6 +222,28 @@ describe("AI-vs-AI matches per difficulty (3,000 ticks)", () => {
       expect(get(d).sunBaseShips, d).toBeGreaterThan(0);
       expect(get(d).alliances, d).toBeGreaterThan(0);
     }
+  });
+
+  it("uses M4's defenses, Warships and weapons by difficulty", () => {
+    const easy = get("easy");
+    const normal = get("normal");
+    const hard = get("hard");
+    const impossible = get("impossible");
+    // Easy never bothers; Normal defends but doesn't arm.
+    expect(easy.shields + easy.platforms + easy.silos + easy.warships).toBe(0);
+    expect(normal.shields + normal.platforms).toBeGreaterThan(0);
+    expect(normal.silos + normal.kinetic + normal.antimatter).toBe(0);
+    // Hard and Impossible build silos, buy Warships and fire both weapons.
+    for (const r of [hard, impossible]) {
+      expect(r.silos).toBeGreaterThan(0);
+      expect(r.warships).toBeGreaterThan(0);
+      expect(r.kinetic).toBeGreaterThan(0);
+      expect(r.antimatter).toBeGreaterThan(0);
+      expect(r.intercepted).toBeGreaterThan(0); // Orbital Defense earns its keep
+    }
+    // Only Impossible fires Kinetic Strikes at siphons.
+    expect(hard.siphonStrikes).toBe(0);
+    expect(impossible.siphonStrikes).toBeGreaterThan(0);
   });
 
   it("a simple player survives and grows on Easy, but not on Impossible", () => {

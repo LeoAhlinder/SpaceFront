@@ -4,6 +4,7 @@ import { BAND_KEYS } from "../grid/polarGrid";
 import type { FactionId } from "../ids";
 import { NEUTRAL } from "../ids";
 import type { System } from "../tick";
+import { addStructure, structuresOn } from "../world/structureIndex";
 import { setOwner } from "../world/territory";
 import type { Ship, Structure, World } from "../world/world";
 import { tooCloseToStructure } from "./structures";
@@ -40,10 +41,11 @@ export function foundSunBase(world: World, ship: Ship): void {
     tile: ship.toTile,
     buildTicksLeft: 0,
     nextTradeTick: world.tick + BALANCE.structures.spaceport.tradeIntervalTicks,
+    readyTick: 0,
+    hp: 1,
+    destroyed: false,
   };
-  world.structures.push(base);
-  world.structureAt[grid.id]![ship.toTile] = base.id;
-  world.log?.structures.push(base.id);
+  addStructure(world, base);
   claimAround(world, grid, ship.toTile, ship.owner);
   faction.coronaTroops += ship.troops;
 }
@@ -107,8 +109,9 @@ export const coronaSystem: System = (world, ctx) => {
   }
   reached.fill(0);
   let tail = 0;
-  for (const s of world.structures) {
-    if (s.kind !== "sunBase" || s.grid !== grid.id || s.owner === NEUTRAL) continue;
+  for (const id of structuresOn(world, grid.id, "sunBase")) {
+    const s = world.structures[id]!;
+    if (s.owner === NEUTRAL) continue;
     bases[s.owner] = bases[s.owner]! + 1;
     if (reached[s.tile] === 0) {
       reached[s.tile] = 1;

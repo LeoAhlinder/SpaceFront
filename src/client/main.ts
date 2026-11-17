@@ -29,8 +29,15 @@ async function main(): Promise<void> {
     () => renderer.camera,
     (x, y) => {
       if (ui.view.value.kind === "system") {
+        // Warships: pick one of yours, or give the picked one (or a new one) its patrol.
+        const warship = renderer.system.ownWarshipAt(x, y);
+        if (warship !== null && ui.mode.value === "none") {
+          actions.selectWarship(warship === ui.selectedWarship.value ? null : warship);
+          return;
+        }
         // A world's icon opens its map; the Corona is played right here.
         const grid = renderer.system.gridAt(x, y, renderer.now());
+        if (actions.clickSpace(renderer.system.camera.screenToWorld(x, y), grid)) return;
         const corona = grid === null ? renderer.system.coronaTileAt(x, y) : null;
         if (grid !== null) actions.openPlanet(grid);
         else if (corona) actions.clickTile(corona);
@@ -64,6 +71,13 @@ async function main(): Promise<void> {
     launchLander: () => actions.toggleMode("launch"),
     launchSunBase: () => actions.toggleMode("sunBase"),
     buildSolarSiphon: () => actions.toggleMode("solarSiphon"),
+    buildShield: () => actions.toggleMode("shieldGenerator"),
+    buildOrbitalDefense: () => actions.toggleMode("orbitalDefense"),
+    buildLaunchSilo: () => actions.toggleMode("launchSilo"),
+    launchWarship: () => actions.toggleMode("warship"),
+    nextWarship: actions.nextWarship,
+    fireKinetic: () => actions.toggleMode("kineticStrike"),
+    fireAntimatter: () => actions.toggleMode("antimatterWarhead"),
   });
 
   render(h(App, { actions }), element("ui"));

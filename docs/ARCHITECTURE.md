@@ -107,7 +107,7 @@ This keeps the simulation portable to a server and stops rendering code from rea
   4. `incomeSystem`: Solars from workers (× world income modifiers), Habitats and Solar Siphons
   5. `attackSystem`: territory spreading
   6. `shipSystem`: arrivals: landers land and attack, Freighters deliver trade income, Sun Base ships found Sun Bases
-  7. `combatSystem`: Warships, orbital defense, weapons
+  7. `combatSystem`: Warships move and shoot, Orbital Defense shoots, shot-down ships are removed, fallout fades (weapons land in `shipSystem`)
   8. `constructionSystem`: build timers; a finished Spaceport schedules its first Freighter
      8b. `tradeSystem`: Spaceports send Freighters to other factions' Spaceports; both owners are paid on arrival (in `shipSystem`)
   9. `coronaSystem`: Sun Base training, heat drain, decay of territory cut off from a Sun Base
@@ -142,7 +142,10 @@ interface World {
   bots: BotState[]; // per-bot RNG stream and next decision tick
   nations: NationState[]; // nation/colony AI: profile, RNG stream, grudges, colony's home
   ships: Ship[]; // in flight, with their planned route
-  structures: Structure[]; // id = index; structureAt[grid][tile] finds them
+  structures: Structure[]; // id = index (destroyed ones stay, neutral); structureAt[grid][tile] finds them
+  structureIndex: number[][][]; // per grid, per kind: structure ids (derived lookup)
+  warships: Warship[]; // free-moving, with a patrol area
+  fallout: Fallout[]; // irradiated areas left by Antimatter Warheads
   attacks: Attack[];
   diplomacy: Diplomacy; // alliances, alliance requests, embargoes
   pending: CommandQueue;
@@ -155,7 +158,8 @@ interface World {
 - **The Corona** is not in `world.grids`: it is `world.corona` (when `MatchConfig.corona` is set), with the next GridId after the bodies. Per-grid arrays (`tileSlots`, `structureAt`, `Faction.gridTiles`) have one entry more than `grids`. Look grids up with `gridOf(world, id)`; `isCorona(world, id)` tells them apart.
 - **Two troop pools per faction:** `troops` for the bodies and `coronaTroops` for the Corona (troops don't grow there). `troopPool`/`addTroops` pick the pool by grid: attacks, landings and launches use the pool of the grid they happen on. `landTiles(world, f)` (tiles on bodies) drives the population cap, income modifiers, the win condition and the delta's tile count.
 - **Tile lists:** every faction keeps `tiles`, the TileRefs (`grid × 2^24 + tile`) it owns, kept in sync by `setOwner` with O(1) swap-removal through `tileSlots`. AI and attacks look at a faction's own land through this list instead of scanning whole grids.
-- **Ships and structures** are plain object arrays for now (dozens to hundreds of them). If profiling shows thousands of ships cost too much, switch to struct-of-arrays with typed arrays and a free list.
+- **Ships and structures** are plain object arrays for now (dozens to hundreds of ships, a few thousand structures). If profiling shows thousands of ships cost too much, switch to struct-of-arrays with typed arrays and a free list.
+- **Structure index** (`world/structureIndex.ts`): every structure change (built, finished, captured, destroyed) goes through `addStructure`, `markFinished`, `transferStructure` or `destroyStructure`, which keep `structureAt`, `structureIndex` (ids per grid and kind) and each faction's `owned` / `finished` counts per kind in sync. Build costs, spacing checks (`tooCloseToStructure` looks only at the tiles around), shields, siphon income and the AI read these instead of scanning all structures. A destroyed structure keeps its id (ids are indexes) but is neutral, `destroyed`, and gone from every lookup.
 
 ### 4.4 Tile grids
 
@@ -198,7 +202,9 @@ A tile is identified by `(gridId, index)`. Code in hot loops only works with pla
 - **Flights to and from the Corona** aim at the tile's fixed point (`planFlight` takes a body id or a point as either end). A trip within the Corona follows the ring around the Sun (`coronaArc`) instead of crossing it. `planRoute` picks the right kind of trip for landers, Sun Base ships and Freighters.
 - **Structures** (`systems/structures.ts`): built on own land with a minimum spacing, paid in Solars, finished after a build timer by the constructionSystem, and captured along with their tile (`setOwner` checks `structureAt`). Spaceports and Habitats go on bodies, Solar Siphons only on the builder's own Corona tiles. A **Sun Base** is not built: a Sun Base ship (paid at launch) flies to an empty Corona tile and becomes a finished base on arrival (`foundSunBase`), claiming the neutral tiles around it; it is lost if the tile was taken meanwhile. Sun Bases count as Spaceports (`isPort`): they launch ships (with Corona troops) and trade.
 - **The Corona** (`systems/corona.ts`): every `BALANCE.corona.intervalTicks` the coronaSystem scans the (small, fixed) Corona grid once: Sun Bases train Corona troops up to a cap, a flood fill from every Sun Base finds the tiles still connected to one of their owner's bases (the rest decay to neutral a few per interval), and heat drains Corona troops by how many of a faction's Corona tiles lie in the inner and middle bands. Siphon income (by band, best band first, with diminishing returns per siphon) is paid by the incomeSystem.
-- Combat checks use a **spatial hash** (grid buckets in space) so nearby ships are found without comparing every pair.
+- **Combat** (`systems/combat.ts`, step 7 of the tick): ships keep their precomputed routes; their position at any tick is computed along the route (`shipPosition`, `pointAlong`), so combat stays deterministic without storing positions. Weapons crossing one map count as being at that world. **Warships** are different: `world.warships` with an integer position that moves every tick toward a waypoint (chasing a target, or wandering within `patrolRadius` of their patrol point; a guarded world's point follows the body). Every `BALANCE.combat.intervalTicks` the system builds a **spatial hash** (`space/spatialHash.ts`, cells of `combat.cellSize`) of everything that can be shot: Warships, ships in flight and Solar Siphons. Each Warship (in id order) then shoots or chases the nearest hostile target it can see (Warships first, then landers and Sun Base ships, then Freighters not trading with it, then siphons), and each loaded **Orbital Defense Platform** shoots the nearest hostile weapon (full damage), lander, Sun Base ship or Warship (less damage) near its world's body. A damaged lander loses troops in proportion to its hit points; anything at 0 is removed at the end of the interval (ships are reported to the client as landed), and a destroyed siphon at once.
+- **Shield Generators** raise the troop cost of attacking their owner's tiles within `shield.radius` (checked per tile in `attackSystem` against the grid's shield list).
+- **Weapons** (`systems/weapons.ts`): `fireWeapon` pays, starts the silo's reload and launches the weapon as a **ship** (`kineticStrike` or `antimatterWarhead`) on a `planRoute` route, so it flies, can be intercepted and is drawn like any ship; everyone gets a `weaponLaunched` event. On arrival `impact` destroys every structure in the radius and kills troops of the tiles' owners; a Kinetic Strike leaves the land owned, a warhead turns it neutral and adds a **fallout** zone (`world.fallout`, oldest first): taking an irradiated tile costs `falloutCostPct`, and nothing can be built there until it fades.
 
 ### 4.7 Commands
 
@@ -231,7 +237,7 @@ type Command =
       signal: "help" | "attack" | "peace";
       about: FactionId;
     }
-  // M4, not implemented yet:
+  // Fires a Kinetic Strike or Antimatter Warhead from a loaded Launch Silo.
   | {
       type: "fireWeapon";
       faction: FactionId;
@@ -239,6 +245,24 @@ type Command =
       kind: WeaponKind;
       grid: GridId;
       tile: number;
+    }
+  // Buys a Warship at a Spaceport or Sun Base; patrols (x, y), or guards a world (guardGrid ≥ 0).
+  | {
+      type: "launchWarship";
+      faction: FactionId;
+      from: StructureId;
+      x: number;
+      y: number;
+      guardGrid: number;
+    }
+  // A new patrol area for one of your Warships.
+  | {
+      type: "patrol";
+      faction: FactionId;
+      warship: number;
+      x: number;
+      y: number;
+      guardGrid: number;
     };
 ```
 
@@ -253,7 +277,7 @@ type Command =
 - **Nations** (`core/ai/nation.ts`): utility-based. Each decision (every `reactionTicks` plus jitter, offset by id) a nation:
   1. remembers: grudges fade a little, and every attack on it adds a small grudge against the attacker (a betrayal adds a big one);
   2. does at most one diplomatic act: gifts troops to an ally that called for help, answers a peace signal, accepts a request (not from traitors, grudge holders, bots, or the leader it gangs up on), betrays an ally (the leader, or a much weaker ally on aggressive profiles; loyalty decides), or asks a random nation or player for an alliance;
-  3. scores every action and takes the best (with a little random jitter): expand into neutral land, attack a neighbor (weaker ones, grudges, the leader and allies' targets score higher), build (a Spaceport on a world without one, Habitats, a siphon on Corona land), launch a Troop Lander to another world (empty land or a weak enemy), send a Sun Base ship as deep into the Corona as it finds room, or raid an enemy siphon or Sun Base with a lander (capturing it with the tile);
+  3. scores every action and takes the best (with a little random jitter): expand into neutral land, attack a neighbor (weaker ones, grudges, the leader and allies' targets score higher), build (a Spaceport on a world without one, Habitats, a siphon on Corona land), launch a Troop Lander to another world (empty land or a weak enemy), send a Sun Base ship as deep into the Corona as it finds room, or raid an enemy siphon or Sun Base with a lander (capturing it with the tile); M4 adds defenses, Warships (bought with a 90-second cooldown) and weapons to the options; nations that use weapons keep a war chest (no Habitats below an Antimatter Warhead's price) once they own a silo, never fire at bots' land, and hold a grudge against whoever's weapon hits them.
   4. on coordinated profiles, asks every ally to join a new war with an "attack" signal.
 
   Troops only go out (attacks, landers) while the population is above `spendAbovePopPct` of its cap. Growth is fastest a bit below half the cap, so the smart profiles stay there and spend only the surplus; this one number makes the biggest strength difference between difficulties. The leader (`findLeader`) is whoever holds the most land, at least `BALANCE.nation.leaderSharePct` of it and clearly more than the runner-up. A colony follows its home nation until their alliance breaks or the home nation dies. The profile:
@@ -273,6 +297,10 @@ type Command =
     gangUpOnLeader: boolean;
     coordinated: boolean; // calls allies into its wars
     raidsSiphons: boolean; // lands on enemy siphons and Sun Bases
+    defense: number; // Shield Generators (when attacked) and Orbital Defense (when landers or weapons come)
+    warships: number; // Warships guarding its siphons; aggressive profiles hunt enemy siphons
+    weapons: number; // Launch Silos, Kinetic Strikes at war targets' structures, Antimatter Warheads
+    strikesSiphons: boolean; // Kinetic Strikes at enemy Solar Siphons
     bonus: { growthPct: number; incomePct: number; buildTimePct: number };
   }
   ```
@@ -288,9 +316,10 @@ After each tick, the host calls `drainDelta(world)` (`core/delta`) to collect wh
 - Tiles whose owner changed: `(grid, tile, owner)` triples in a `Uint32Array`. `setOwner` records changed tiles in `world.log`, but only after the host calls `trackChanges(world)`; tests and servers that don't listen record nothing. `world.log` is not game state and is never hashed.
 - Faction stats: `id, alive, troops, workers, land tiles, solars, Corona troops, Corona tiles, traitor until` per faction in a `Float64Array`
 - The winner, or -1
-- Structures built, finished or captured; ships launched (with their routes) and landed
+- Structures built, finished, captured, fired (silo reload) or destroyed; ships launched (with their routes) and landed (or shot down)
+- Every Warship (`id, owner, x, y, hp, guarded grid`, an `Int32Array`, each tick, since they move), and combat `effects` to draw: beams (shots), blasts (ships destroyed) and weapon impacts
 - Diplomacy `events` (alliance requests, alliances, betrayals, gifts, embargoes, signals, colonies going independent), and a full `diplomacy` snapshot (alliances and embargoes) whenever there were any. Events go into `world.log` like tile changes: not game state, never hashed.
-- Later: events like "nuke incoming" or "siphon captured"
+- Weapon events: `weaponLaunched` (sent to everyone: the client alerts for warheads, and for Kinetic Strikes at worlds where you hold land), `weaponIntercepted`, `weaponHit`
 
 Deltas are the only thing that leaves the worker each tick.
 

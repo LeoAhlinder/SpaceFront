@@ -19,6 +19,16 @@ export interface Actions {
   /** Turns a mode on, or off if it's already on. */
   readonly toggleMode: (mode: Exclude<Mode, "none">) => void;
   readonly cancel: () => void;
+  /**
+   * A click in empty space or on a world's icon in the system view, while
+   * placing a Warship or with one selected: launch it, or send it on patrol
+   * there. Returns false if neither applies (the click does what it usually does).
+   */
+  readonly clickSpace: (point: { x: number; y: number }, grid: number | null) => boolean;
+  /** Selects one of the player's Warships (null: none) for a patrol order. */
+  readonly selectWarship: (id: number | null) => void;
+  /** Selects the player's next Warship (cycling) and opens the system view. */
+  readonly nextWarship: () => void;
   readonly focusAlert: (id: number, grid: number) => void;
   /** Opens the diplomacy panel for a faction (null closes it). */
   readonly select: (faction: number | null) => void;
@@ -52,6 +62,17 @@ export function createActions(bridge: SimBridge): Actions {
   };
   const isSpaceport = (id: number) => view.structures.get(id)?.kind === "spaceport";
 
+  /** The player's lowest-id loaded Launch Silo, or null. */
+  const loadedSilo = (): number | null => {
+    let best: number | null = null;
+    for (const s of view.structures.values()) {
+      if (s.owner !== player() || s.kind !== "launchSilo" || s.buildTicksLeft > 0) continue;
+      if (s.readyTick > ui.tick.value) continue;
+      if (best === null || s.id < best) best = s.id;
+    }
+    return best;
+  };
+
   const openPlanet = (grid: number) => {
     lastPlanet = grid;
     ui.view.value = { kind: "planet", grid };
@@ -73,6 +94,7 @@ export function createActions(bridge: SimBridge): Actions {
           botCount: BALANCE.match.defaultBotCount,
           playerName: "You",
           difficulty: ui.difficulty.value,
+          ...devStartSolars(),
         },
       });
     },
@@ -91,8 +113,13 @@ export function createActions(bridge: SimBridge): Actions {
       const mode = ui.mode.value;
       if (me.tileCount === 0) {
         send({ type: "spawn", faction, grid, tile: hit.tile });
-      } else if (mode === "spaceport" || mode === "habitat" || mode === "solarSiphon") {
+      } else if (isBuildMode(mode)) {
         send({ type: "build", faction, kind: mode, grid, tile: hit.tile });
+        ui.mode.value = "none";
+      } else if (mode === "kineticStrike" || mode === "antimatterWarhead") {
+        const from = loadedSilo();
+        if (from === null) return;
+        send({ type: "fireWeapon", faction, kind: mode, from, grid, tile: hit.tile });
         ui.mode.value = "none";
       } else if (mode === "launch" || mode === "sunBase") {
         // Sun Base ships leave from a Spaceport, so they carry main troops.
@@ -129,14 +156,62 @@ export function createActions(bridge: SimBridge): Actions {
 
     toggleMode: (mode) => {
       if (ui.phase.value !== "playing") return;
-      if ((mode === "launch" || mode === "sunBase") && ui.readyPorts.value === 0) return;
+      const needsPort = mode === "launch" || mode === "sunBase" || mode === "warship";
+      if (needsPort && ui.readyPorts.value === 0) return;
+      const isWeapon = mode === "kineticStrike" || mode === "antimatterWarhead";
+      if (isWeapon && ui.loadedSilos.value === 0) return;
       ui.mode.value = ui.mode.value === mode ? "none" : mode;
-      // The Corona is played in the system view.
-      if ((mode === "sunBase" || mode === "solarSiphon") && ui.mode.value === mode) openSystem();
+      ui.selectedWarship.value = null;
+      // The Corona and Warship patrols are played in the system view.
+      const inSpace = mode === "sunBase" || mode === "solarSiphon" || mode === "warship";
+      if (inSpace && ui.mode.value === mode) openSystem();
     },
 
     cancel: () => {
       ui.mode.value = "none";
+      ui.selectedWarship.value = null;
+    },
+
+    clickSpace: (point, grid) => {
+      const faction = player();
+      if (faction === null || ui.phase.value !== "playing") return false;
+      const area = {
+        x: Math.round(point.x),
+        y: Math.round(point.y),
+        guardGrid: grid ?? -1,
+      };
+      const selected = ui.selectedWarship.value;
+      if (selected !== null) {
+        send({ type: "patrol", faction, warship: selected, ...area });
+        ui.selectedWarship.value = null;
+        return true;
+      }
+      if (ui.mode.value !== "warship") return false;
+      const from = portFor(grid ?? -1);
+      if (from === null) return true;
+      send({ type: "launchWarship", faction, from, ...area });
+      ui.mode.value = "none";
+      return true;
+    },
+
+    selectWarship: (id) => {
+      ui.mode.value = "none";
+      ui.selectedWarship.value = id;
+    },
+
+    nextWarship: () => {
+      if (ui.phase.value !== "playing") return;
+      const me = player();
+      const mine = [...view.warships.values()]
+        .filter((w) => w.owner === me)
+        .map((w) => w.id)
+        .sort((a, b) => a - b);
+      if (mine.length === 0) return;
+      const current = ui.selectedWarship.value;
+      const next = mine.find((id) => current === null || id > current) ?? mine[0]!;
+      ui.mode.value = "none";
+      ui.selectedWarship.value = next;
+      openSystem();
     },
 
     focusAlert: (id, grid) => {
@@ -189,4 +264,25 @@ export function createActions(bridge: SimBridge): Actions {
       }
     },
   };
+}
+
+const BUILD_MODES = [
+  "spaceport",
+  "habitat",
+  "solarSiphon",
+  "shieldGenerator",
+  "orbitalDefense",
+  "launchSilo",
+] as const;
+
+/** Modes where a click places a structure. */
+function isBuildMode(mode: Mode): mode is (typeof BUILD_MODES)[number] {
+  return (BUILD_MODES as readonly string[]).includes(mode);
+}
+
+/** `?solars=N` in a dev build starts the player with N Solars (for play-testing). */
+function devStartSolars(): { devStartSolars?: number } {
+  if (!import.meta.env.DEV) return {};
+  const n = Number(new URLSearchParams(location.search).get("solars"));
+  return Number.isSafeInteger(n) && n > 0 ? { devStartSolars: n } : {};
 }

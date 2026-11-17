@@ -1,20 +1,26 @@
 import { BALANCE } from "../../data/balance";
 import type { BuildCommand } from "../commands/commands";
 import { structureCost } from "../../data/bodies";
+import { tilesWithin } from "../grid/area";
 import type { FactionId, GridId } from "../ids";
 import type { System } from "../tick";
 import { gridModifier } from "../world/modifiers";
+import { addStructure, KIND_CODE, markFinished } from "../world/structureIndex";
 import type { Structure, StructureKind, World } from "../world/world";
 import { gridOf } from "../world/world";
 
-/** True if a structure on this map is within BALANCE.structures.minSpacing steps. */
+/** Scratch list for area lookups; overwritten on every use. */
+const area: number[] = [];
+
+/**
+ * True if a structure on this map is within BALANCE.structures.minSpacing
+ * steps. Looks only at the tiles around `tile`, not at every structure.
+ */
 export function tooCloseToStructure(world: World, gridId: GridId, tile: number): boolean {
   const grid = gridOf(world, gridId)!;
-  for (const s of world.structures) {
-    if (s.grid === gridId && grid.distance(s.tile, tile) < BALANCE.structures.minSpacing) {
-      return true;
-    }
-  }
+  const at = world.structureAt[gridId]!;
+  const n = tilesWithin(grid, tile, BALANCE.structures.minSpacing - 1, area);
+  for (let i = 0; i < n; i++) if (at[area[i]!]! >= 0) return true;
   return false;
 }
 
@@ -28,8 +34,7 @@ export function buildCost(
   kind: StructureKind,
   gridId: GridId,
 ): number {
-  let owned = 0;
-  for (const s of world.structures) if (s.owner === faction && s.kind === kind) owned++;
+  let owned = world.factions[faction]!.owned[KIND_CODE[kind]]!;
   if (kind === "sunBase") {
     for (const ship of world.ships)
       if (ship.owner === faction && ship.kind === "sunBaseShip") owned++;
@@ -40,6 +45,11 @@ export function buildCost(
     owned,
     gridModifier(world, gridId, "buildCostPct"),
   );
+}
+
+/** Starting hit points of a structure kind (only siphons can be shot at). */
+export function structureHp(kind: StructureKind): number {
+  return kind === "solarSiphon" ? BALANCE.hp.solarSiphon : 1;
 }
 
 /** Places a structure (validated and paid for before). It works once construction finishes. */
@@ -57,10 +67,11 @@ export function applyBuild(world: World, command: BuildCommand): Structure {
       Math.floor((BALANCE.structures[command.kind].buildTicks * faction.bonus.buildTimePct) / 100),
     ),
     nextTradeTick: -1,
+    readyTick: 0,
+    hp: structureHp(command.kind),
+    destroyed: false,
   };
-  world.structures.push(structure);
-  world.structureAt[command.grid]![command.tile] = structure.id;
-  world.log?.structures.push(structure.id);
+  addStructure(world, structure);
   return structure;
 }
 
@@ -70,6 +81,7 @@ export const constructionSystem: System = (world, ctx) => {
     if (s.buildTicksLeft === 0) continue;
     s.buildTicksLeft -= 1;
     if (s.buildTicksLeft > 0) continue;
+    markFinished(world, s);
     if (s.kind === "spaceport" || s.kind === "sunBase") {
       s.nextTradeTick = ctx.tick + nextTradeDelay(world);
     }

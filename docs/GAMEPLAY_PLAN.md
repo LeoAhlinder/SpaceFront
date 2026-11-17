@@ -90,12 +90,14 @@ You, at first. Later, online human players.
 
 Difficulty controls **which** countries show up, **how many**, and **how smart and strong** they are.
 
-| Difficulty | Nations present                                                                | AI behavior                                                                    | Bonuses                                             |
-| ---------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ | --------------------------------------------------- |
-| Easy       | 6 smaller nations (one Tier 2, five Tier 3), 1 colony                          | Passive, slow to build, rarely launch ships                                    | −25% growth                                         |
-| Normal     | 12 nations incl. 2 major powers, 3 colonies                                    | Expands steadily, defends, builds spaceports                                   | none                                                |
-| Hard       | 20 nations, all major space powers, 8 colonies on Mars, Moon and Jupiter moons | Targets the weakest neighbor, allies against the leader, betrays (weapons: M4) | +15% growth, +15% income                            |
-| Impossible | 30 nations, 16 colonies everywhere                                             | Coordinated invasions, raids Solar Siphons (Kinetic Strikes: M4)               | +35% growth, +35% income, builds in 60% of the time |
+| Difficulty | Nations present                                                                | AI behavior                                                                            | Bonuses                                             |
+| ---------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------- | --------------------------------------------------- |
+| Easy       | 6 smaller nations (one Tier 2, five Tier 3), 1 colony                          | Passive, slow to build, rarely launch ships                                            | −25% growth                                         |
+| Normal     | 12 nations incl. 2 major powers, 3 colonies                                    | Expands steadily, defends, builds spaceports                                           | none                                                |
+| Hard       | 20 nations, all major space powers, 8 colonies on Mars, Moon and Jupiter moons | Targets the weakest neighbor, allies against the leader, betrays, Warships and weapons | +15% growth, +15% income                            |
+| Impossible | 30 nations, 16 colonies everywhere                                             | Coordinated invasions, raids Solar Siphons with landers, Warships and Kinetic Strikes  | +35% growth, +35% income, builds in 60% of the time |
+
+Normal nations build Shield Generators and Orbital Defense when attacked; Easy nations use none of the combat structures.
 
 Country "tiers" decide when a country appears and how strong its AI is:
 
@@ -164,12 +166,12 @@ Structures, spacecraft and weapons (below). Prices rise with how many of that th
 
 ## 6. Spacecraft (instead of naval ships)
 
-| Ship              | Role     | Behavior                                                                                                                                                                                                               |
-| ----------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Troop Lander**  | Invasion | Carries a chunk of your troops to a target world, or across an ocean on the same world. Takes the landing tile and attacks from that beachhead; landing on your own land reinforces. Can be shot down on the way (M4). |
-| **Freighter**     | Trade    | Flies automatically between Spaceports and earns Solars. A prime target for Warships.                                                                                                                                  |
-| **Warship**       | Combat   | Patrols an area of space and attacks enemy Landers, Freighters and Siphons.                                                                                                                                            |
-| **Sun Base ship** | Builder  | Carries a Sun Base to an empty Corona tile. It becomes a base on arrival.                                                                                                                                              |
+| Ship              | Role     | Behavior                                                                                                                                                                                                                             |
+| ----------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Troop Lander**  | Invasion | Carries a chunk of your troops to a target world, or across an ocean on the same world. Takes the landing tile and attacks from that beachhead; landing on your own land reinforces. Can be shot down on the way (M4).               |
+| **Freighter**     | Trade    | Flies automatically between Spaceports and earns Solars. A prime target for Warships.                                                                                                                                                |
+| **Warship**       | Combat   | Bought at a Spaceport or Sun Base. Patrols an area of space (or guards a world, following it) and attacks enemy Landers, Freighters (not those trading with you), Sun Base ships, Warships and Siphons. Damaged landers lose troops. |
+| **Sun Base ship** | Builder  | Carries a Sun Base to an empty Corona tile. It becomes a base on arrival.                                                                                                                                                            |
 
 Movement rules:
 
@@ -185,9 +187,9 @@ Movement rules:
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Spaceport**                | Required to launch any spacecraft. Also the endpoint for trade.                                                                                                                                                     |
 | **Habitat**                  | +population cap, +income                                                                                                                                                                                            |
-| **Shield Generator**         | Boosts defense in a radius, so attackers lose more troops                                                                                                                                                           |
-| **Orbital Defense Platform** | Shoots down incoming ships and warheads near the body                                                                                                                                                               |
-| **Launch Silo**              | Fires weapons (below)                                                                                                                                                                                               |
+| **Shield Generator**         | Your land within 10 steps costs attackers twice the troops                                                                                                                                                          |
+| **Orbital Defense Platform** | Shoots down incoming warheads near the body, and damages hostile landers, Sun Base ships and Warships there (it can't stop a salvo alone)                                                                           |
+| **Launch Silo**              | Fires weapons (below), then reloads for 30 seconds                                                                                                                                                                  |
 | **Mass Driver** _(later)_    | Fast transport link between your own bodies                                                                                                                                                                         |
 | **Sun Base**                 | Corona only. Claims territory around itself, lets your Corona territory spread, slowly trains a few troops on the spot, and works as a Spaceport for Landers. Expensive, and the price rises with each one you own. |
 | **Solar Siphon**             | Corona only. Drains Solars from the Sun, with output set by its band (§5)                                                                                                                                           |
@@ -196,13 +198,13 @@ Movement rules:
 
 ## 8. Weapons (late game)
 
-| Weapon                       | Effect                                                                                                                                     |
-| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Kinetic Strike**           | A cheap tungsten rod. Destroys structures and kills troops in a small radius.                                                              |
-| **Antimatter Warhead**       | Big radius. Wipes out territory and leaves it "irradiated", so it grows slowly for a while.                                                |
-| **Planet Cracker** _(maybe)_ | Very expensive, slow to charge, and visible to everyone. Scars a large part of a body for good. A dramatic late-game comeback or finisher. |
+| Weapon                       | Effect                                                                                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Kinetic Strike**           | A cheap tungsten rod. Destroys structures and kills troops in a small radius (2 steps); the land stays owned. Also hits Corona structures.                                |
+| **Antimatter Warhead**       | Big radius (10 steps). Wipes out territory and structures and leaves the land "irradiated" for 5 minutes: retaking it costs 4× the troops and nothing can be built there. |
+| **Planet Cracker** _(maybe)_ | Very expensive, slow to charge, and visible to everyone. Scars a large part of a body for good. A dramatic late-game comeback or finisher.                                |
 
-Orbital Defense Platforms can shoot down warheads in flight. Big weapons are announced to everyone, so players can react.
+Weapons fly like ships (across a map they come down from orbit), so Orbital Defense Platforms can shoot them down in flight. Every launch is announced to everyone; the HUD alerts for every Antimatter Warhead, and for Kinetic Strikes aimed at worlds where you hold land.
 
 ---
 

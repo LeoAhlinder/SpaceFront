@@ -2,7 +2,7 @@
 
 The numbers live in [`src/data/balance.ts`](../src/data/balance.ts), [`src/data/bodies.ts`](../src/data/bodies.ts) and [`src/data/difficulty.ts`](../src/data/difficulty.ts). This file explains what they are meant to produce, so a change can be checked against intent. Time is in ticks: **10 ticks = 1 second**.
 
-Last pass: M3 (nations and difficulty). Nothing here has been tested with real players yet.
+Last pass: M4 (combat depth, balance pass 2). Nothing here has been tested with real players yet.
 
 ---
 
@@ -33,12 +33,16 @@ World income modifiers multiply worker income: Io +50%, Triton +30%, the belt +2
 
 ## Structures
 
-| Structure | Cost   | Build time | Notes                                             |
-| --------- | ------ | ---------- | ------------------------------------------------- |
-| Spaceport | 1,000  | 5 s        | Launches landers; sends a Freighter every 20–30 s |
-| Habitat   | 800    | 4 s        | +3,000 population cap, +2 ☉/tick                  |
-| Sun Base  | 5,000  | on arrival | Paid at launch; ships in flight count as owned    |
-| Siphon    | 20,000 | 6 s        | Only on your own Corona land                      |
+| Structure        | Cost   | Build time | Notes                                                     |
+| ---------------- | ------ | ---------- | --------------------------------------------------------- |
+| Spaceport        | 1,000  | 5 s        | Launches landers; sends a Freighter every 20–30 s         |
+| Habitat          | 800    | 4 s        | +3,000 population cap, +2 ☉/tick                          |
+| Sun Base         | 5,000  | on arrival | Paid at launch; ships in flight count as owned            |
+| Siphon           | 20,000 | 6 s        | Only on your own Corona land                              |
+| Shield Generator | 3,000  | 5 s        | Your land within 10 steps costs attackers 200%            |
+| Orbital Defense  | 6,000  | 8 s        | Guards its world (300 space units around the body)        |
+| Launch Silo      | 8,000  | 10 s       | Fires weapons; reloads 30 s after each                    |
+| Warship          | 5,000  | at once    | Bought at a Spaceport or Sun Base; +50% per Warship owned |
 
 - Each structure of the same kind you already own makes the next one cost **+50%** (1,000 → 1,500 → 2,000 …). Linear, not doubling, so late-game building stays possible.
 - The Moon builds at 70% cost.
@@ -78,6 +82,35 @@ World income modifiers multiply worker income: Io +50%, Triton +30%, the belt +2
 | Defender loses | 80% of their troops per tile, for each tile taken                                         |
 | Landing        | 10 troops to take the landing tile                                                        |
 
+## Space combat and weapons (M4)
+
+**Intent:** combat structures are mid-game purchases (a few minutes of income each), weapons are late-game tools that need a war chest, and nothing makes a world or the Sun untouchable: one Orbital Defense stops one warhead, not a salvo, and one Warship guards one area.
+
+| Thing              | Numbers                                                                                                                                                                       |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hit points         | Lander 120, Freighter 60, Sun Base ship 150, Warship 300, Kinetic Strike 40, Antimatter Warhead 80, Solar Siphon 400                                                          |
+| Warship            | Speed 9 (landers 8, Freighters 10, so it can chase landers but not Freighters); sees 400, fires within 160; 20 damage every 0.5 s; wanders 250 around its patrol point        |
+| Orbital Defense    | Range 300 around its body; one shot per second: 40 damage to weapons, 10 to ships and Warships                                                                                |
+| Weapons            | Fly at 14 units per tick (6 tiles per tick across one map); a silo reloads for 30 s                                                                                           |
+| Kinetic Strike     | 4,000 ☉; radius 2 (13 tiles); destroys structures; kills 60 + 300% of the owner's troops per tile for each tile hit                                                           |
+| Antimatter Warhead | 25,000 ☉; radius 10 (221 tiles); wipes land and structures; kills 200% of the owner's troops per tile for each tile; fallout for 5 minutes (retaking costs 400%, no building) |
+
+- **What one platform can do:** a warhead spends about 21 ticks within range, so one platform gets 2–3 shots and stops a single warhead (2 hits) but not two fired together (`combat.test.ts` checks both). A lander loses about a third of its troops flying past one platform; a Warship patrolling its target's world usually destroys it.
+- **Damaged landers** lose troops in proportion to their lost hit points, so defenses thin an invasion instead of being all or nothing.
+- **A Warship on a siphon** destroys it in about 10 s (20 shots), so guarding the Sun matters.
+- Warheads cost 25,000 (not 40,000 as first tried): at 40,000 no nation fired one in the 5-minute AI test.
+
+### Nation AI
+
+| Difficulty | Defense | Warships | Weapons | Strikes siphons |
+| ---------- | ------- | -------- | ------- | --------------- |
+| Easy       | 0       | 0        | 0       | no              |
+| Normal     | 30      | 15       | 0       | no              |
+| Hard       | 50      | 40       | 40      | no              |
+| Impossible | 70      | 60       | 60      | yes             |
+
+Tier 3 nations get half the defense and no Warships or weapons. A nation builds a Shield Generator near a border it is attacked across (up to 2 per 1,000 tiles) and an Orbital Defense Platform on a world where it holds 500+ tiles when hostile landers or weapons are on their way (one per world). It buys Warships to guard its first siphon, and on aggressive profiles (Hard, Impossible) up to `warships / 20` of them to hunt enemy siphons, with 90 s between purchases (without the cooldown, Hard nations re-bought about 230 Warships in 5 minutes as they lost them). With a loaded silo it fires Kinetic Strikes at the structures (silos, defenses, Spaceports) of the leader or whoever it holds a big grudge against, and Antimatter Warheads into their land; on Impossible also Kinetic Strikes at enemy siphons. Once it owns a silo it keeps a war chest: no Habitats while that would leave less than a warhead's price. A weapon hit adds a 120 grudge against the shooter.
+
 ## Bots
 
 - Decide every 1–1.5 s. Mostly expand; sometimes attack neighbors with under 70% of their troops.
@@ -115,6 +148,7 @@ World income modifiers multiply worker income: Io +50%, Triton +30%, the belt +2
 
 - **M2 goal test** (`src/core/systems/economy.test.ts`): over 10 minutes, a faction that builds a Spaceport and three Habitats and trades ends with about 3.6× the Solars (counting what it spent) and 2.3× the population of one that does nothing.
 - **Solar-system soak test** (`tests/soak/solarSystem.test.ts`): 40 bots for 5 minutes (with the Corona) build about 42 Spaceports, 237 Habitats and 7 Sun Bases, at about 0.38 ms per tick. That is a lot of Habitats.
-- **Difficulty test** (`tests/ai/difficulty.test.ts`): every difficulty with its nations, 40 bots and a scripted simple player in Uzbekistan for 5 minutes. Nations hold ≈ 7 / 34 / 71 / 46% of all land on Easy / Normal / Hard / Impossible and conquer ≈ 375 / 1,800 / 6,500 / 3,900 tiles each from other factions; the player ends with ≈ 6,400 tiles on Easy and 8 on Impossible. Impossible costs ≈ 0.6 ms per tick at 5 minutes and ≈ 0.85–1.1 ms at 10 minutes (46 nations build about 3,000–4,000 Habitats by then, and every structure check scans all structures: the first thing to index if AI cost grows).
+- **Difficulty test** (`tests/ai/difficulty.test.ts`): every difficulty with its nations, 40 bots and a scripted simple player in Uzbekistan for 5 minutes. After M4, nations hold ≈ 7 / 32 / 53 / 39% of all land on Easy / Normal / Hard / Impossible and conquer ≈ 375 / 2,200 / 4,500 / 3,100 tiles each from other factions (M3: 7 / 34 / 71 / 46% and 375 / 1,800 / 6,500 / 3,900: Hard and Impossible nations now spend on defenses, Warships and weapons, and hurt each other with them); the player ends with ≈ 6,400 tiles on Easy and ≈ 190 on Impossible. M4 actions in those 5 minutes: Normal builds ≈ 8 platforms; Hard ≈ 4 shields, 67 platforms, 21 silos, 39 Warships, 19 Kinetic Strikes and 2 warheads; Impossible ≈ 11 shields, 55 platforms, 30 silos, 60 Warships, 61 Kinetic Strikes (50 at siphons) and 3 warheads, with 64 weapons shot down. Impossible costs ≈ 0.6 ms per tick at 5 minutes and ≈ 0.83 ms at 10 minutes (≈ 3,100 structures; the structure index removed the scans over all structures).
 - **M2.5 goal test** (`src/core/systems/corona.test.ts`): over 10 minutes, a faction with two inner siphons ends with ≈ 17× the Solars (counting what it spent) of one that stays home, and ≈ 2.7× one with two outer siphons. A lander onto its Sun Base takes everything, and the attacker then earns ≈ 40× the loser's income.
-- Siphon income dwarfs worker income on small holdings. That is the design (the Sun is the prize), but it needs a check with real players, and M4's Warships are meant to keep siphons in check.
+- Siphon income dwarfs worker income on small holdings. That is the design (the Sun is the prize), but it needs a check with real players. Since M4, Warships and Kinetic Strikes can destroy siphons outright; Impossible nations do both.
+- **Combat tests** (`src/core/systems/combat.test.ts`): a shield makes attackers pay at least 1.5× the troops per tile (200% on the base cost, before terrain); irradiated land costs more than twice as much to retake; one platform downs a lone warhead but lets one of two through; a Warship guarding Mars cuts a passing lander's troops by more than half; a Warship destroys a siphon; two hostile Warships fight until one is left.

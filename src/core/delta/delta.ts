@@ -1,6 +1,6 @@
 import type { GameEvent } from "../world/diplomacy";
 import { refGrid, refTile } from "../world/tileRef";
-import type { ShipKind, StructureKind, World } from "../world/world";
+import type { CombatEffect, ShipKind, StructureKind, World } from "../world/world";
 import { coronaTiles, gridOf } from "../world/world";
 
 /**
@@ -18,7 +18,14 @@ export interface StructureView {
   readonly grid: number;
   readonly tile: number;
   readonly buildTicksLeft: number;
+  /** Launch Silos: the tick they are loaded again. */
+  readonly readyTick: number;
+  /** Destroyed by a weapon or a Warship: gone from the map. */
+  readonly destroyed: boolean;
 }
+
+/** Numbers per Warship in TickDelta.warships: id, owner, x, y, hit points, guarded grid (-1). */
+export const WARSHIP_STRIDE = 6;
 
 /** A launched ship and its whole route, so the client can animate it on its own. */
 export interface ShipView {
@@ -55,8 +62,12 @@ export interface TickDelta {
   readonly shipsLanded: readonly number[];
   /** Winning faction id, or -1 while the match runs. */
   readonly winner: number;
-  /** Diplomacy events since the last drain (requests, alliances, gifts, signals…). */
+  /** Diplomacy and weapon events since the last drain (requests, alliances, warnings…). */
   readonly events: readonly GameEvent[];
+  /** Every Warship now, WARSHIP_STRIDE numbers each (they move every tick). */
+  readonly warships: Int32Array;
+  /** Shots, blasts and weapon impacts to draw. */
+  readonly effects: readonly CombatEffect[];
   /** The full diplomacy picture, sent only when something diplomatic happened. */
   readonly diplomacy: DiplomacySnapshot | null;
 }
@@ -81,7 +92,14 @@ export function diplomacySnapshot(world: World): DiplomacySnapshot {
 
 /** Starts recording changes, so drainDelta can report them. */
 export function trackChanges(world: World): void {
-  world.log ??= { tiles: [], structures: [], shipsLaunched: [], shipsLanded: [], events: [] };
+  world.log ??= {
+    tiles: [],
+    structures: [],
+    shipsLaunched: [],
+    shipsLanded: [],
+    events: [],
+    effects: [],
+  };
 }
 
 /** Collects and clears everything that changed since the last call. */
@@ -124,6 +142,8 @@ export function drainDelta(world: World): TickDelta {
       grid: s.grid,
       tile: s.tile,
       buildTicksLeft: s.buildTicksLeft,
+      readyTick: s.readyTick,
+      destroyed: s.destroyed,
     };
   });
   const launched = new Set(log?.shipsLaunched ?? []);
@@ -144,6 +164,11 @@ export function drainDelta(world: World): TickDelta {
     }));
   const shipsLanded = [...(log?.shipsLanded ?? [])];
   const events = [...(log?.events ?? [])];
+  const effects = [...(log?.effects ?? [])];
+  const warships = new Int32Array(world.warships.length * WARSHIP_STRIDE);
+  world.warships.forEach((w, i) =>
+    warships.set([w.id, w.owner, w.x, w.y, w.hp, w.guardGrid], i * WARSHIP_STRIDE),
+  );
 
   if (log) {
     log.tiles.length = 0;
@@ -151,6 +176,7 @@ export function drainDelta(world: World): TickDelta {
     log.shipsLaunched.length = 0;
     log.shipsLanded.length = 0;
     log.events.length = 0;
+    log.effects.length = 0;
   }
   return {
     tick: world.tick,
@@ -161,6 +187,8 @@ export function drainDelta(world: World): TickDelta {
     shipsLanded,
     winner: world.winner ?? -1,
     events,
+    warships,
+    effects,
     diplomacy: events.length > 0 ? diplomacySnapshot(world) : null,
   };
 }

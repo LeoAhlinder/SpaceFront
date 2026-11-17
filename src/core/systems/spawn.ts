@@ -37,5 +37,5 @@ export function applySpawn(world: World, command: SpawnCommand): void {
   faction.hasSpawned = true;
   faction.troops = Math.floor((BALANCE.spawn.troops * faction.bonus.startPopPct) / 100);
   faction.workers = Math.floor((BALANCE.spawn.workers * faction.bonus.startPopPct) / 100);
-  faction.solars = BALANCE.spawn.solars;
+  faction.solars += BALANCE.spawn.solars; // on top of any granted before spawning
 }

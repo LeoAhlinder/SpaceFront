@@ -1,5 +1,7 @@
 import { receiveSignal } from "../ai/nation";
 import { startAttack } from "../systems/attack";
+import { applyLaunchWarship, applyPatrol, warshipOf } from "../systems/combat";
+import { applyFireWeapon } from "../systems/weapons";
 import { applyLaunch } from "../systems/ships";
 import { applySpawn } from "../systems/spawn";
 import { applyBuild } from "../systems/structures";
@@ -78,6 +80,13 @@ function applyCommand(world: World, command: Command): string | null {
       });
       return null;
     }
+    case "launchWarship":
+      return applyLaunchWarship(world, command);
+    case "patrol":
+      applyPatrol(world, warshipOf(world, command.faction, command.warship)!, command);
+      return null;
+    case "fireWeapon":
+      return applyFireWeapon(world, command);
     case "signal": {
       const { to, signal, about } = command;
       pushEvent(world, { kind: "signal", from: command.faction, to, signal, about });

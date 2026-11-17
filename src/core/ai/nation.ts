@@ -8,7 +8,11 @@ import type { FactionId, GridId } from "../ids";
 import { NEUTRAL } from "../ids";
 import { Rng } from "../math/rng";
 import { populationCap } from "../systems/population";
+import { coronaTilePoint } from "../space/space";
+import { warshipCost } from "../systems/combat";
 import { buildCost, tooCloseToStructure } from "../systems/structures";
+import { isIrradiated } from "../systems/weapons";
+import { firstOwned, KIND_CODE, ownedOfKind, structuresOn } from "../world/structureIndex";
 import type { System } from "../tick";
 import {
   alliesOf,
@@ -19,7 +23,7 @@ import {
   setIndependent,
 } from "../world/diplomacy";
 import { refGrid, refTile } from "../world/tileRef";
-import type { Faction, Structure, World } from "../world/world";
+import type { Faction, Structure, StructureKind, Warship, WeaponKind, World } from "../world/world";
 import {
   addFaction,
   coronaTiles,
@@ -65,6 +69,8 @@ export interface NationState {
   peaceFrom: FactionId;
   /** The last war it asked its allies to join, so it asks only once. */
   calledTarget: FactionId;
+  /** It buys no Warship before this tick (so losses aren't replaced at once). */
+  nextWarshipTick: number;
 }
 
 export interface NationOptions {
@@ -108,6 +114,7 @@ export function addNation(world: World, name: string, options: NationOptions): F
     helpFrom: NEUTRAL,
     peaceFrom: NEUTRAL,
     calledTarget: NEUTRAL,
+    nextWarshipTick: 0,
   });
   if (home !== NEUTRAL) world.diplomacy.alliances.add(pairKey(home, faction.id));
   return faction;
@@ -139,6 +146,9 @@ export const nationSystem: System = (world, ctx) => {
     if (inSpawnPhase(world) || faction.tiles.length === 0) continue;
     leader ??= findLeader(world);
     for (const command of think(world, n, faction, leader)) {
+      if (command.type === "launchWarship") {
+        n.nextWarshipTick = ctx.tick + N.warshipCooldownTicks;
+      }
       queueCommand(world, command, ctx.tick + 1);
     }
   }
@@ -261,11 +271,14 @@ function think(world: World, n: NationState, me: Faction, leader: FactionId): Co
   };
   // Troops only go out while the population is above the profile's floor.
   const pop = me.troops + me.workers;
-  const cap = populationCap(landTiles(world, me), habitatsOf(world, n.faction));
+  const cap = populationCap(landTiles(world, me), me.finished[KIND_CODE.habitat]);
   const canSpend = pop * 100 >= cap * n.profile.spendAbovePopPct;
   if (canSpend) considerLand(world, n, me, leader, consider);
   considerBuild(world, n, me, consider);
   considerSpace(world, n, me, leader, canSpend, consider);
+  considerDefense(world, n, me, consider);
+  considerWarships(world, n, me, leader, consider);
+  considerWeapons(world, n, me, leader, consider);
 
   const command = best.command;
   if (command) {
@@ -273,15 +286,6 @@ function think(world: World, n: NationState, me: Faction, leader: FactionId): Co
     callAllies(world, n, command, out);
   }
   return out;
-}
-
-/** Finished Habitats a faction owns. */
-function habitatsOf(world: World, faction: number): number {
-  let n = 0;
-  for (const s of world.structures) {
-    if (s.owner === faction && s.kind === "habitat" && s.buildTicksLeft === 0) n++;
-  }
-  return n;
 }
 
 /** Grudges fade a little every decision; every attack on the nation adds a small one. */
@@ -490,15 +494,12 @@ function considerBuild(world: World, n: NationState, me: Faction, consider: Cons
     consider(p.builder + 40, build("solarSiphon"));
     return;
   }
-  let portHere = false;
-  let ports = 0;
-  for (const s of world.structures) {
-    if (s.owner !== n.faction || s.kind !== "spaceport") continue;
-    ports++;
-    if (s.grid === grid) portHere = true;
-  }
+  const ports = me.owned[KIND_CODE.spaceport]!;
+  const portHere = ownsOn(world, n.faction, grid, "spaceport");
   if (!portHere) consider(p.builder + (ports === 0 ? 40 : 15), build("spaceport"));
-  else consider((p.builder >> 1) + 10, build("habitat"));
+  else if (!savingForWarhead(world, n, me, grid)) {
+    consider((p.builder >> 1) + 10, build("habitat"));
+  }
 }
 
 /**
@@ -515,13 +516,7 @@ function considerSpace(
 ): void {
   const p = n.profile;
   if (p.spacefaring === 0) return;
-  let port: Structure | null = null;
-  for (const s of world.structures) {
-    if (s.owner === n.faction && s.kind === "spaceport" && s.buildTicksLeft === 0) {
-      port = s;
-      break;
-    }
-  }
+  const port = firstOwned(world, n.faction, "spaceport", true);
   if (!port) return;
   const launch = (
     kind: "troopLander" | "sunBaseShip",
@@ -566,8 +561,7 @@ function considerSpace(
   if (!corona) return;
 
   // A Sun Base, as deep in the Corona as it can find room.
-  let bases = 0;
-  for (const s of world.structures) if (s.owner === n.faction && s.kind === "sunBase") bases++;
+  let bases = me.owned[KIND_CODE.sunBase]!;
   for (const ship of world.ships) {
     if (ship.owner === n.faction && ship.kind === "sunBaseShip") bases++;
   }
@@ -594,15 +588,27 @@ function considerSpace(
   }
 }
 
-/** An enemy siphon (or Sun Base) worth raiding: the leader's first, else any non-ally's. */
-function raidTarget(world: World, n: NationState, leader: FactionId): Structure | null {
-  let pick: Structure | null = null;
-  const count = world.structures.length;
+/**
+ * An enemy siphon (or Sun Base, unless `siphonsOnly`) worth raiding: the
+ * leader's first, else any non-ally's.
+ */
+function raidTarget(
+  world: World,
+  n: NationState,
+  leader: FactionId,
+  siphonsOnly = false,
+): Structure | null {
+  const corona = world.corona;
+  if (!corona) return null;
+  const siphons = structuresOn(world, corona.id, "solarSiphon");
+  const bases = siphonsOnly ? [] : structuresOn(world, corona.id, "sunBase");
+  const count = siphons.length + bases.length;
   if (count === 0) return null;
+  let pick: Structure | null = null;
   const start = n.rng.nextInt(count);
   for (let k = 0; k < count; k++) {
-    const s = world.structures[(start + k) % count]!;
-    if (s.kind !== "solarSiphon" && s.kind !== "sunBase") continue;
+    const i = (start + k) % count;
+    const s = world.structures[i < siphons.length ? siphons[i]! : bases[i - siphons.length]!]!;
     if (s.owner === NEUTRAL || s.owner === n.faction || isAllied(world, n.faction, s.owner)) {
       continue;
     }
@@ -635,4 +641,232 @@ function callAllies(world: World, n: NationState, command: Command, out: Command
       about: target as FactionId,
     });
   }
+}
+
+/** True if `faction` owns a structure of this kind on this grid. */
+function ownsOn(world: World, faction: number, grid: number, kind: StructureKind): boolean {
+  for (const id of structuresOn(world, grid, kind)) {
+    if (world.structures[id]!.owner === faction) return true;
+  }
+  return false;
+}
+
+/** A random own tile on a body (not the Corona) where it may build, or null. */
+function buildSpot(
+  world: World,
+  n: NationState,
+  me: Faction,
+): { grid: GridId; tile: number } | null {
+  const ref = me.tiles[n.rng.nextInt(me.tiles.length)]!;
+  const grid = refGrid(ref);
+  const tile = refTile(ref);
+  if (isCorona(world, grid) || tooCloseToStructure(world, grid, tile)) return null;
+  if (isIrradiated(world, grid, tile)) return null;
+  return { grid, tile };
+}
+
+/** True if a hostile lander or weapon is flying at `grid`. */
+function threatenedFromSpace(world: World, faction: FactionId, grid: number): boolean {
+  for (const ship of world.ships) {
+    if (ship.toGrid !== grid || ship.kind === "freighter" || ship.kind === "sunBaseShip") continue;
+    if (ship.owner !== faction && !isAllied(world, faction, ship.owner)) return true;
+  }
+  return false;
+}
+
+/**
+ * Defenses: a Shield Generator near a border it is being attacked across,
+ * and an Orbital Defense Platform on a big holding (sooner when enemy
+ * landers or weapons are on their way).
+ */
+function considerDefense(world: World, n: NationState, me: Faction, consider: Consider): void {
+  const p = n.profile;
+  if (p.defense === 0) return;
+  const spot = buildSpot(world, n, me);
+  if (!spot) return;
+  const { grid, tile } = spot;
+  const build = (kind: "shieldGenerator" | "orbitalDefense"): Command | null =>
+    me.solars >= buildCost(world, n.faction, kind, grid) + N.weaponReserve
+      ? { type: "build", faction: n.faction, kind, grid, tile }
+      : null;
+
+  const maxShields = Math.max(1, Math.floor((landTiles(world, me) * N.shieldsPerKiloTile) / 1000));
+  if (me.owned[KIND_CODE.shieldGenerator]! < maxShields) {
+    let attacked = false;
+    for (const a of world.attacks) if (a.target === n.faction && a.grid === grid) attacked = true;
+    if (attacked && bordersEnemy(world, n, grid, tile)) {
+      consider(p.defense + 35, build("shieldGenerator"));
+    }
+  }
+
+  let platforms = 0;
+  for (const id of structuresOn(world, grid, "orbitalDefense")) {
+    if (world.structures[id]!.owner === n.faction) platforms++;
+  }
+  if (platforms < N.defensesPerWorld && world.gridBodies[grid]) {
+    // Built when enemy landers or weapons are on their way, on worlds worth defending.
+    const worthIt = me.gridTiles[grid]! >= N.defendWorldTiles;
+    if (worthIt && threatenedFromSpace(world, n.faction, grid)) {
+      consider((p.defense >> 1) + 40, build("orbitalDefense"));
+    }
+  }
+}
+
+/** True if a hostile faction's land lies within a short random walk of `tile`. */
+function bordersEnemy(world: World, n: NationState, grid: GridId, tile: number): boolean {
+  const g = gridOf(world, grid)!;
+  let at = tile;
+  for (let step = 0; step < 6; step++) {
+    const count = g.neighbors(at, scratch);
+    if (count === 0) return false;
+    for (let i = 0; i < count; i++) {
+      const owner = g.owner[scratch[i]!]!;
+      if (owner !== n.faction && owner !== NEUTRAL && !isAllied(world, n.faction, owner)) {
+        return true;
+      }
+    }
+    at = scratch[n.rng.nextInt(count)]!;
+  }
+  return false;
+}
+
+/**
+ * Warships: buys them up to its profile's limit (the first guards its
+ * siphons, or else its home world; the rest guard home), and on aggressive
+ * profiles sends every Warship but the first hunting enemy siphons.
+ */
+function considerWarships(
+  world: World,
+  n: NationState,
+  me: Faction,
+  leader: FactionId,
+  consider: Consider,
+): void {
+  const p = n.profile;
+  if (p.warships === 0) return;
+  const mine: Warship[] = [];
+  for (const w of world.warships) if (w.owner === n.faction) mine.push(w);
+  const max = Math.max(1, Math.floor(p.warships / N.warshipsPerShip));
+  const port = firstOwned(world, n.faction, "spaceport", true);
+  const corona = world.corona;
+  const siphon = corona ? firstOwned(world, n.faction, "solarSiphon", false) : null;
+  const hunts = p.aggression >= 60 && corona !== null;
+  // The first guards its siphons; more only to hunt enemy siphons (on aggressive profiles).
+  const wanted = hunts ? max : siphon ? 1 : 0;
+  const canBuy = world.tick >= n.nextWarshipTick;
+  const cost = warshipCost(world, n.faction) + N.weaponReserve;
+  if (port && canBuy && mine.length < wanted && me.solars >= cost) {
+    const guard =
+      siphon && corona && mine.length === 0
+        ? { ...coronaTilePoint(corona, siphon.tile), guardGrid: -1 }
+        : { x: 0, y: 0, guardGrid: n.homeGrid as number };
+    consider(p.warships + 20, {
+      type: "launchWarship",
+      faction: n.faction,
+      from: port.id,
+      ...guard,
+    });
+  }
+  // Hunters: every Warship but a guard (if it has siphons to guard).
+  const firstHunter = siphon ? 1 : 0;
+  if (mine.length <= firstHunter || !hunts || !corona) return;
+  const target = raidTarget(world, n, leader, true);
+  if (!target) return;
+  const point = coronaTilePoint(corona, target.tile);
+  for (let i = firstHunter; i < mine.length; i++) {
+    const w = mine[i]!;
+    const dx = w.patrolX - point.x;
+    const dy = w.patrolY - point.y;
+    const range = BALANCE.warship.fireRange;
+    if (w.guardGrid < 0 && dx * dx + dy * dy < range * range) continue; // already on it
+    consider(50 + (p.aggression >> 2), {
+      type: "patrol",
+      faction: n.faction,
+      warship: w.id,
+      x: point.x,
+      y: point.y,
+      guardGrid: -1,
+    });
+    return;
+  }
+}
+
+/**
+ * Weapons: builds a Launch Silo, then fires Kinetic Strikes at enemy siphons
+ * (on profiles that strike siphons) or at a war target's silos, defenses and
+ * Spaceports, and Antimatter Warheads into the land of the leader or whoever
+ * it holds a big grudge against. Never at bots: they aren't worth a weapon.
+ */
+function considerWeapons(
+  world: World,
+  n: NationState,
+  me: Faction,
+  leader: FactionId,
+  consider: Consider,
+): void {
+  const p = n.profile;
+  if (p.weapons === 0) return;
+  const W = BALANCE.weapons;
+  const silos = ownedOfKind(world, n.faction, "launchSilo");
+  if (silos.length === 0) {
+    const spot = buildSpot(world, n, me);
+    const cost = spot ? buildCost(world, n.faction, "launchSilo", spot.grid) : 0;
+    if (spot && me.solars >= cost + N.weaponReserve) {
+      consider(p.weapons + 15, { type: "build", faction: n.faction, kind: "launchSilo", ...spot });
+    }
+    return;
+  }
+  const silo = silos.find((s) => s.buildTicksLeft === 0 && s.readyTick <= world.tick);
+  if (!silo) return;
+  const fire = (kind: WeaponKind, grid: GridId, tile: number): Command | null =>
+    me.solars >= W[kind].cost + N.weaponReserve
+      ? { type: "fireWeapon", faction: n.faction, kind, from: silo.id, grid, tile }
+      : null;
+
+  if (p.strikesSiphons) {
+    const target = raidTarget(world, n, leader, true);
+    if (target) consider(60 + (p.weapons >> 2), fire("kineticStrike", target.grid, target.tile));
+  }
+
+  // The enemy it most wants to hurt: the leader it gangs up on, else its biggest grudge.
+  let enemy: FactionId = NEUTRAL;
+  let reason = 0;
+  if (p.gangUpOnLeader && leader !== NEUTRAL && leader !== n.faction) {
+    enemy = leader;
+    reason = 40;
+  }
+  for (const [id, grudge] of n.grudges) {
+    if (grudge > reason && grudge >= N.maxAttackGrudge) {
+      enemy = id as FactionId;
+      reason = grudge;
+    }
+  }
+  if (enemy === NEUTRAL || isAllied(world, n.faction, enemy)) return;
+  const target = world.factions[enemy]!;
+  if (!target.alive || target.kind === "bot" || target.tiles.length === 0) return;
+  const bonus = Math.min(40, reason >> 2);
+
+  // A Kinetic Strike at one of its structures (silos and defenses first).
+  for (const kind of ["launchSilo", "orbitalDefense", "spaceport"] as const) {
+    const s = firstOwned(world, enemy, kind, false);
+    if (s && !isCorona(world, s.grid)) {
+      consider(p.weapons + 20 + bonus, fire("kineticStrike", s.grid, s.tile));
+      break;
+    }
+  }
+  // An Antimatter Warhead into its land on a body.
+  const ref = target.tiles[n.rng.nextInt(target.tiles.length)]!;
+  if (!isCorona(world, refGrid(ref))) {
+    consider(p.weapons + 30 + bonus, fire("antimatterWarhead", refGrid(ref), refTile(ref)));
+  }
+}
+
+/**
+ * Nations that use weapons keep a war chest once they have a Launch Silo:
+ * Habitats wait until an Antimatter Warhead would still be affordable.
+ */
+function savingForWarhead(world: World, n: NationState, me: Faction, grid: GridId): boolean {
+  if (n.profile.weapons === 0 || me.finished[KIND_CODE.launchSilo] === 0) return false;
+  const habitat = buildCost(world, n.faction, "habitat", grid);
+  return me.solars < habitat + BALANCE.weapons.antimatterWarhead.cost;
 }

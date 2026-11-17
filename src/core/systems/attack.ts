@@ -7,7 +7,9 @@ import type { System } from "../tick";
 import { isAllied } from "../world/diplomacy";
 import { FrontierHeap } from "../world/frontierHeap";
 import { gridModifier } from "../world/modifiers";
+import { structuresOn } from "../world/structureIndex";
 import { setOwner } from "../world/territory";
+import { isIrradiated } from "./weapons";
 import { refGrid, refTile } from "../world/tileRef";
 import type { Attack, Faction, World } from "../world/world";
 import { addTroops, coronaTiles, gridOf, isCorona, troopPool } from "../world/world";
@@ -174,6 +176,12 @@ function tileCost(world: World, grid: TileGrid, attack: Attack, tile: number): n
     const density = defenseDensity(world, defender, grid.id);
     base = A.enemyBaseCost + Math.floor((density * A.enemyDensityPct) / 100);
     base = Math.floor((base * gridModifier(world, grid.id, "defensePct")) / 100);
+    if (isShielded(world, grid, tile, attack.target)) {
+      base = Math.floor((base * BALANCE.shield.defensePct) / 100);
+    }
+  }
+  if (isIrradiated(world, grid.id, tile)) {
+    base = Math.floor((base * BALANCE.weapons.antimatterWarhead.falloutCostPct) / 100);
   }
   if (world.factions[attack.attacker]!.traitorUntil > world.tick) {
     base = Math.floor((base * BALANCE.diplomacy.traitorAttackCostPct) / 100);
@@ -219,6 +227,16 @@ function priority(world: World, grid: TileGrid, attack: Attack, tile: number): n
     owned * A.ownedNeighborWeight +
     world.rng.nextInt(A.priorityJitter)
   );
+}
+
+/** True if a finished Shield Generator of `owner` covers `tile` (BALANCE.shield.radius). */
+export function isShielded(world: World, grid: TileGrid, tile: number, owner: number): boolean {
+  for (const id of structuresOn(world, grid.id, "shieldGenerator")) {
+    const s = world.structures[id]!;
+    if (s.owner !== owner || s.buildTicksLeft > 0) continue;
+    if (grid.distance(s.tile, tile) <= BALANCE.shield.radius) return true;
+  }
+  return false;
 }
 
 function isCandidate(grid: TileGrid, tile: number, target: FactionId): boolean {

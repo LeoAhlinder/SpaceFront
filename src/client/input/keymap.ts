@@ -10,6 +10,13 @@ export const KEYMAP = {
   launchLander: "l",
   launchSunBase: "u",
   buildSolarSiphon: "s",
+  buildShield: "g",
+  buildOrbitalDefense: "o",
+  buildLaunchSilo: "n",
+  launchWarship: "w",
+  nextWarship: "p",
+  fireKinetic: "k",
+  fireAntimatter: "x",
 } as const;
 
 export type KeyAction = keyof typeof KEYMAP;
