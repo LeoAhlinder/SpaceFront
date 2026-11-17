@@ -157,7 +157,8 @@ interface TileGrid {
   readonly size: number; // number of tiles
   readonly owner: Uint16Array; // faction id per tile
   readonly terrain: Uint8Array; // terrain type per tile
-  readonly troops: Uint32Array; // optional local troops (Corona)
+  readonly maxNeighbors: number; // size of the `out` buffer for neighbors()
+  isUsable(tile: number): boolean; // false for space/padding slots
   neighbors(tile: number, out: Int32Array): number; // writes neighbors, returns count
 }
 ```

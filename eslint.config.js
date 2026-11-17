@@ -158,6 +158,14 @@ export default tseslint.config(
       ),
     },
   },
+  // Tests of core may compare against Math.sin etc. (they are not simulation code),
+  // but must stay reproducible, so Math.random remains banned.
+  {
+    files: ["src/core/**/*.test.ts", "src/data/**/*.test.ts"],
+    rules: {
+      "no-restricted-properties": ["error", ...MATH_BANNED.filter((r) => r.property === "random")],
+    },
+  },
 
   // ---- worker -----------------------------------------------------------------
   {

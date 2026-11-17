@@ -44,7 +44,7 @@ These are the most important rules in the project. Breaking them causes desyncs 
 ### 3.2 Must not (ESLint bans these in `core/`)
 
 - `Math.random`, `Date`, `performance`, `setTimeout`, `setInterval`, `requestAnimationFrame`
-- `Math.sin`, `cos`, `tan`, `atan2`, `exp`, `log`, `pow`, `cbrt`, `hypot`. (`Math.sqrt`, `floor`, `ceil`, `round`, `abs`, `min`, `max`, `imul` are fine.)
+- `Math.sin`, `cos`, `tan`, `atan2`, `exp`, `log`, `pow`, `cbrt`, `hypot`. (`Math.sqrt`, `floor`, `ceil`, `round`, `abs`, `min`, `max`, `imul` are fine.) Tests (`*.test.ts`) may use them to check results against the lookup tables, but not `Math.random`.
 - `for…in`, and iterating objects whose keys are numeric ids
 - Any import from `client/`, `worker/`, PixiJS, Preact or DOM types
 - `async` code. The simulation is fully synchronous.

@@ -20,11 +20,11 @@ How to read the tasks: each one is roughly one PR. `☐` = not started.
 
 ### M0.2 Core foundations
 
-- ☐ `core/math`: seeded RNG, fixed-point helpers, trig lookup table + `tools/gen-trig.ts`
-- ☐ `core/world`: `World`, `Faction`, `MatchConfig` types; `createWorld(config)`
-- ☐ `core/grid`: `TileGrid` interface + `DiscGrid` with neighbors and tests
-- ☐ Tick runner: runs systems in order, increments `tick`
-- ☐ `hashWorld` + the first determinism test (empty world, 1,000 ticks, two runs, same hash)
+- ☑ `core/math`: seeded RNG, fixed-point helpers, trig lookup table + `tools/gen-trig.ts`
+- ☑ `core/world`: `World`, `Faction`, `MatchConfig` types; `createWorld(config)`
+- ☑ `core/grid`: `TileGrid` interface + `DiscGrid` with neighbors and tests
+- ☑ Tick runner: runs systems in order, increments `tick`
+- ☑ `hashWorld` + the first determinism test (empty world, 1,000 ticks, two runs, same hash)
 
 ### M0.3 Territory gameplay
 

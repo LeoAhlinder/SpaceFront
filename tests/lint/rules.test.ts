@@ -33,6 +33,14 @@ describe("core determinism bans", () => {
     expect(await ruleIds(file, code)).toContain(rule);
   });
 
+  it("lets core tests use Math.sin but still bans Math.random there", async () => {
+    const testFile = "src/core/example.test.ts";
+    expect(await ruleIds(testFile, "export const x = Math.sin(1);")).toEqual([]);
+    expect(await ruleIds(testFile, "export const x = Math.random();")).toContain(
+      "no-restricted-properties",
+    );
+  });
+
   it("allows deterministic Math helpers", async () => {
     const code = "export const x = Math.floor(Math.sqrt(9)) + Math.abs(-1) + Math.imul(2, 3);";
     expect(await ruleIds(file, code)).toEqual([]);
