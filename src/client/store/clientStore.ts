@@ -180,6 +180,10 @@ export const view = {
   warships: new Map<number, WarshipView>(),
   effects: [] as EffectView[],
   fallout: [] as FalloutView[],
+  /** True while watching a replay (the player gives no commands). */
+  replay: false,
+  /** Real milliseconds per tick right now (replays can run faster). */
+  tickMs: 100,
   /** When the last tick arrived (performance.now()), for smooth motion between ticks. */
   lastTickAt: 0,
   /** Allied pairs (low × 65536 + high) and embargoes (from × 65536 + to). */

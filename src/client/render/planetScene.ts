@@ -2,14 +2,30 @@ import { Container, Graphics } from "pixi.js";
 import type { MatchInit } from "../../shared/messages";
 import { BALANCE } from "../../data/balance";
 import { view } from "../store/clientStore";
+import type { Atlas } from "./atlas";
+import type { SpriteName } from "./atlasFrames";
 import { Camera } from "./camera";
 import { terrainPalette } from "./colors";
+import { SpriteLayer } from "./spriteLayer";
 import { TerritoryLayer } from "./territoryLayer";
 
-/** Spaceports are drawn this many tiles wide. */
-const PORT_SIZE = 5;
+/** Structures are drawn this many tiles wide (their sprite frame, with a little margin). */
+const STRUCTURE_TILES = 6.5;
+/** …but never smaller than this many screen pixels, so they stay visible zoomed out. */
+const MIN_STRUCTURE_PX = 12;
+const SHIP_PX = 16;
 /** Zooming out below this share of the "fit" zoom leaves for the system view. */
 const EXIT_ZOOM_SHARE = 0.55;
+
+const STRUCTURE_SPRITES: Record<string, SpriteName> = {
+  spaceport: "spaceport",
+  habitat: "habitat",
+  shieldGenerator: "shieldGenerator",
+  orbitalDefense: "orbitalDefense",
+  launchSilo: "launchSilo",
+  sunBase: "sunBase",
+  solarSiphon: "solarSiphon",
+};
 
 /**
  * One world's flat map: its territory, structures and ships hopping across
@@ -21,13 +37,20 @@ export class PlanetScene {
   readonly camera: Camera;
   private readonly world = new Container();
   private layers: TerritoryLayer[] = [];
-  private readonly overlay = new Graphics();
+  /** Areas (shields, fallout, impact zones) under the sprites. */
+  private readonly under = new Graphics();
+  private readonly sprites: SpriteLayer;
+  /** Glows and flashes, added on top. */
+  private readonly fx: SpriteLayer;
   private active = -1;
   private fitZoom = 1;
 
-  constructor() {
+  constructor(atlas: Atlas) {
     this.camera = new Camera(this.world);
     this.container.addChild(this.world);
+    this.sprites = new SpriteLayer(atlas);
+    this.fx = new SpriteLayer(atlas);
+    this.fx.container.blendMode = "add";
   }
 
   setMatch(init: MatchInit): void {
@@ -46,7 +69,7 @@ export class PlanetScene {
       layer.sprite.visible = false;
       this.world.addChild(layer.sprite);
     }
-    this.world.addChild(this.overlay);
+    this.world.addChild(this.under, this.sprites.container, this.fx.container);
     this.active = -1;
   }
 
@@ -67,7 +90,7 @@ export class PlanetScene {
   }
 
   /** Updates changed tiles on every map and redraws structures and ships at tick `t`. */
-  draw(t: number): void {
+  draw(t: number, visible: boolean): void {
     this.layers.forEach((layer, i) => {
       const dirty = view.dirty[i];
       if (dirty && dirty.length > 0) {
@@ -75,72 +98,54 @@ export class PlanetScene {
         dirty.length = 0;
       }
     });
+    if (!visible) return;
     const layer = this.layers[this.active];
-    const g = this.overlay.clear();
-    if (!layer) return;
-    const toWorld = (tile: number) => ({
-      x: (tile % layer.width) + 0.5 - layer.width / 2,
-      y: Math.floor(tile / layer.width) + 0.5 - layer.height / 2,
-    });
+    const g = this.under.clear();
+    const sp = this.sprites;
+    const fx = this.fx;
+    sp.begin();
+    fx.begin();
+    if (layer) this.drawMap(layer, g, sp, fx, t);
+    sp.end();
+    fx.end();
+  }
+
+  private drawMap(
+    layer: TerritoryLayer,
+    g: Graphics,
+    sp: SpriteLayer,
+    fx: SpriteLayer,
+    t: number,
+  ): void {
+    const w = layer.width;
+    const h = layer.height;
+    const toX = (tile: number) => (tile % w) + 0.5 - w / 2;
+    const toY = (tile: number) => Math.floor(tile / w) + 0.5 - h / 2;
     const px = 1 / this.camera.zoom;
+    const size = Math.max(STRUCTURE_TILES, MIN_STRUCTURE_PX * px);
 
     for (const s of view.structures.values()) {
       if (s.grid !== this.active) continue;
-      const p = toWorld(s.tile);
+      const x = toX(s.tile);
+      const y = toY(s.tile);
       const color = view.factions.get(s.owner)?.color ?? 0xffffff;
-      const alpha = s.buildTicksLeft > 0 ? 0.45 : 1;
-      const outline = { width: Math.max(0.3, 1.5 * px), color: 0xffffff };
-      const half = PORT_SIZE / 2;
-      if (s.kind === "spaceport") {
-        // A square with a dot: the launch pad.
-        g.rect(p.x - half, p.y - half, PORT_SIZE, PORT_SIZE)
-          .fill({ color, alpha })
-          .stroke(outline);
-        g.circle(p.x, p.y, PORT_SIZE / 5).fill(0xffffff);
-      } else if (s.kind === "shieldGenerator") {
-        // A hexagon, and the area it protects.
-        const pts: number[] = [];
-        for (let i = 0; i < 6; i++) {
-          pts.push(
-            p.x + Math.cos((i * Math.PI) / 3) * half,
-            p.y + Math.sin((i * Math.PI) / 3) * half,
-          );
-        }
-        g.poly(pts).fill({ color, alpha }).stroke(outline);
-        if (s.buildTicksLeft === 0) {
-          diamond(g, p.x, p.y, BALANCE.shield.radius + 0.5);
-          g.stroke({ width: px, color: 0x8fd8ff, alpha: 0.5 });
-        }
-      } else if (s.kind === "orbitalDefense") {
-        // A diamond with a cross-hair: the gun platform.
-        diamond(g, p.x, p.y, half);
-        g.fill({ color, alpha }).stroke(outline);
-        g.moveTo(p.x - half, p.y)
-          .lineTo(p.x + half, p.y)
-          .moveTo(p.x, p.y - half)
-          .lineTo(p.x, p.y + half)
-          .stroke({ width: Math.max(0.2, px), color: 0xffffff });
-      } else if (s.kind === "launchSilo") {
-        // A triangle with a hot core: the silo.
-        g.poly([p.x, p.y - half, p.x + half, p.y + half, p.x - half, p.y + half])
-          .fill({ color, alpha })
-          .stroke(outline);
-        g.circle(p.x, p.y + half / 3, PORT_SIZE / 7).fill(s.readyTick <= t ? 0xff5a3c : 0x777777);
-      } else {
-        // A dome: the Habitat.
-        g.circle(p.x, p.y, PORT_SIZE / 2.2)
-          .fill({ color, alpha })
-          .stroke(outline);
-        g.rect(p.x - PORT_SIZE / 4, p.y, PORT_SIZE / 2, PORT_SIZE / 10).fill(0xffffff);
+      const building = s.buildTicksLeft > 0;
+      sp.add(STRUCTURE_SPRITES[s.kind] ?? "habitat", x, y, size, color, building ? 0.5 : 1);
+      if (building) continue;
+      if (s.kind === "shieldGenerator") {
+        diamond(g, x, y, BALANCE.shield.radius + 0.5);
+        g.fill({ color: 0x8fd8ff, alpha: 0.05 }).stroke({ width: px, color: 0x8fd8ff, alpha: 0.5 });
+        sp.add("shieldGlow", x, y, size);
+      } else if (s.kind === "launchSilo" && s.readyTick <= t) {
+        sp.add("siloGlow", x, y, size, 0xffffff, 0.75 + 0.25 * Math.sin(t * 0.8));
       }
     }
 
     // Irradiated land, faded by how long it has left.
     for (const f of view.fallout) {
       if (f.grid !== this.active) continue;
-      const p = toWorld(f.tile);
       const left = Math.min(1, (f.untilTick - t) / BALANCE.weapons.antimatterWarhead.falloutTicks);
-      diamond(g, p.x, p.y, f.radius + 0.5);
+      diamond(g, toX(f.tile), toY(f.tile), f.radius + 0.5);
       g.fill({ color: 0x9cff3c, alpha: 0.1 + 0.2 * left }).stroke({
         width: px,
         color: 0x9cff3c,
@@ -148,75 +153,68 @@ export class PlanetScene {
       });
     }
 
-    // Weapon impacts: a flash that grows to the blast radius and fades.
+    // Weapon impacts: a flash that grows to the blast radius, a shock ring and a fading glow.
     for (const e of view.effects) {
-      const fx = e.effect;
-      if (fx.kind !== "impact" || fx.grid !== this.active) continue;
+      const effect = e.effect;
+      if (effect.kind !== "impact" || effect.grid !== this.active) continue;
       const age = (t - e.tick) / Math.max(1, e.untilTick - e.tick);
       if (age < 0 || age > 1) continue;
-      const p = toWorld(fx.tile);
-      diamond(g, p.x, p.y, (fx.radius + 0.5) * Math.min(1, age * 3) + 1);
-      g.fill({ color: 0xfff1c0, alpha: 0.85 * (1 - age) }).stroke({
-        width: 2 * px,
-        color: 0xff5a3c,
-        alpha: 1 - age,
-      });
+      const x = toX(effect.tile);
+      const y = toY(effect.tile);
+      const r = effect.radius + 0.5;
+      diamond(g, x, y, r * Math.min(1, age * 3) + 1);
+      g.fill({ color: 0xfff1c0, alpha: 0.6 * (1 - age) });
+      const big = effect.weapon === "antimatterWarhead";
+      fx.add("glow", x, y, r * 4 * (0.6 + age), big ? 0xff60e0 : 0xffa040, 1 - age);
+      fx.add("ring", x, y, r * 2.4 * Math.min(1, age * 2) + 2, 0xfff1c0, 1 - age);
+      if (age < 0.3) fx.add("spark", x, y, r * 2, 0xffffff, 1 - age / 0.3, age * 2);
     }
 
-    // Landers hopping across this map, and landers arriving from space.
+    // Landers hopping across this map, landers arriving from space, incoming weapons.
     for (const ship of view.ships.values()) {
       if (ship.toGrid !== this.active) continue;
       const color = view.factions.get(ship.owner)?.color ?? 0xffffff;
-      const target = toWorld(ship.toTile);
-      if (ship.kind === "kineticStrike" || ship.kind === "antimatterWarhead") {
-        // Incoming weapon: the area it will hit, pulsing, and the strike itself on a hop.
+      const tx = toX(ship.toTile);
+      const ty = toY(ship.toTile);
+      const isWeapon = ship.kind === "kineticStrike" || ship.kind === "antimatterWarhead";
+      if (isWeapon) {
+        // The area it will hit, pulsing, with a target marker.
         const radius = BALANCE.weapons[ship.kind].radius + 0.5;
         const pulse = 0.5 + 0.5 * Math.sin(t * 1.5);
-        diamond(g, target.x, target.y, radius);
+        diamond(g, tx, ty, radius);
         g.fill({ color: 0xff3c3c, alpha: 0.08 + 0.1 * pulse }).stroke({
           width: 1.5 * px,
           color: 0xff3c3c,
           alpha: 0.6 + 0.4 * pulse,
         });
-        if (ship.fromGrid === this.active) {
-          const from = toWorld(ship.fromTile);
-          const f = Math.min(
-            1,
-            Math.max(0, (t - ship.launchTick) / (ship.arriveTick - ship.launchTick)),
-          );
-          const x = from.x + (target.x - from.x) * f;
-          const y = from.y + (target.y - from.y) * f;
-          g.moveTo(
-            from.x + (target.x - from.x) * Math.max(0, f - 0.15),
-            from.y + (target.y - from.y) * Math.max(0, f - 0.15),
-          )
-            .lineTo(x, y)
-            .stroke({ width: 2 * px, color: 0xff5a3c, alpha: 0.7 });
-          g.circle(x, y, Math.max(0.8, 3 * px)).fill(0xfff1c0);
-        }
-        continue;
+        sp.add("reticle", tx, ty, Math.max(radius * 1.2, 20 * px), 0xff3c3c, 0.6 + 0.4 * pulse);
       }
       if (ship.fromGrid === this.active) {
-        const from = toWorld(ship.fromTile);
+        const fx0 = toX(ship.fromTile);
+        const fy0 = toY(ship.fromTile);
         const f = Math.min(
           1,
           Math.max(0, (t - ship.launchTick) / (ship.arriveTick - ship.launchTick)),
         );
-        const x = from.x + (target.x - from.x) * f;
-        const y = from.y + (target.y - from.y) * f;
-        if (ship.kind === "freighter") {
-          // Freighters: small squares, no route line.
-          const r = Math.max(0.8, 3 * px);
-          g.rect(x - r, y - r, 2 * r, 2 * r).fill({ color, alpha: 0.8 });
-          continue;
+        const x = fx0 + (tx - fx0) * f;
+        const y = fy0 + (ty - fy0) * f;
+        const heading = Math.atan2(ty - fy0, tx - fx0) + Math.PI / 2;
+        const shipSize = SHIP_PX * px * (ship.kind === "freighter" ? 0.8 : 1);
+        if (isWeapon) {
+          g.moveTo(
+            fx0 + (tx - fx0) * Math.max(0, f - 0.15),
+            fy0 + (ty - fy0) * Math.max(0, f - 0.15),
+          )
+            .lineTo(x, y)
+            .stroke({ width: 2 * px, color: 0xff5a3c, alpha: 0.7 });
+        } else if (ship.kind !== "freighter") {
+          g.moveTo(x, y).lineTo(tx, ty).stroke({ width: px, color, alpha: 0.5 });
         }
-        g.moveTo(x, y).lineTo(target.x, target.y).stroke({ width: px, color, alpha: 0.5 });
-        g.circle(x, y, Math.max(1.2, 4 * px))
-          .fill(color)
-          .stroke({ width: px, color: 0x000000 });
+        drawFlame(fx, x, y, shipSize, heading);
+        sp.add(ship.kind, x, y, shipSize, isWeapon ? 0xffffff : color, 1, heading);
       } else if (ship.kind === "troopLander") {
         // Incoming from another world: mark the landing spot.
-        g.circle(target.x, target.y, Math.max(2, 7 * px)).stroke({ width: 1.5 * px, color });
+        sp.add("landing", tx, ty, Math.max(4, 22 * px), color, 0.9, t * 0.05);
       }
     }
   }
@@ -229,6 +227,26 @@ export class PlanetScene {
     const tile = layer.tileAt(p.x, p.y);
     return tile < 0 ? null : { grid: this.active, tile };
   }
+}
+
+/** An engine flame behind a ship pointing along `heading` (0 = up). */
+export function drawFlame(
+  fx: SpriteLayer,
+  x: number,
+  y: number,
+  size: number,
+  heading: number,
+): void {
+  const back = size * 0.55;
+  fx.add(
+    "flame",
+    x - Math.sin(heading) * back,
+    y + Math.cos(heading) * back,
+    size * 0.7,
+    0xffffff,
+    0.8,
+    heading, // the flame's tip points down in the atlas, behind an up-pointing ship
+  );
 }
 
 /** Starts a diamond path (a Manhattan circle, the shape of a radius on a map) of half-size r. */

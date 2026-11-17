@@ -15,7 +15,7 @@ import {
   view,
   worldName,
 } from "../store/clientStore";
-import { KEYMAP } from "../input/keymap";
+import { keyLabel } from "../input/keymap";
 import { formatCount } from "./format";
 import { strings } from "./strings";
 
@@ -105,7 +105,7 @@ function Hud({ actions }: { actions: Actions }) {
 /** Which view is open, and the button to switch. */
 function ViewBar({ actions }: { actions: Actions }) {
   const v = ui.view.value;
-  const key = KEYMAP.toggleSystemView.toUpperCase();
+  const key = keyLabel("toggleSystemView");
   const body = v.kind === "planet" ? worldBody(v.grid) : null;
   const mods = body?.modifiers ?? {};
   return (
@@ -173,65 +173,61 @@ function Actions({ actions }: { actions: Actions }) {
     <div class="actions">
       {buildButton(
         "spaceport",
-        strings.buildSpaceport(KEYMAP.buildSpaceport.toUpperCase()),
+        strings.buildSpaceport(keyLabel("buildSpaceport")),
         strings.spaceportInfo,
       )}
-      {buildButton(
-        "habitat",
-        strings.buildHabitat(KEYMAP.buildHabitat.toUpperCase()),
-        strings.habitatInfo,
-      )}
+      {buildButton("habitat", strings.buildHabitat(keyLabel("buildHabitat")), strings.habitatInfo)}
       <button
         class={`build ${mode === "launch" ? "active" : ""}`}
         disabled={!spawned || !canLaunch}
         title={canLaunch ? "" : strings.needSpaceport}
         onClick={() => actions.toggleMode("launch")}
       >
-        <span>{strings.launchLander(KEYMAP.launchLander.toUpperCase())}</span>
+        <span>{strings.launchLander(keyLabel("launchLander"))}</span>
         <span class="cost">{ui.attackRatioPct.value}%</span>
       </button>
       {buildButton(
         "sunBase",
-        strings.launchSunBase(KEYMAP.launchSunBase.toUpperCase()),
+        strings.launchSunBase(keyLabel("launchSunBase")),
         strings.sunBaseInfo,
         "port",
       )}
       {buildButton(
         "solarSiphon",
-        strings.buildSolarSiphon(KEYMAP.buildSolarSiphon.toUpperCase()),
+        strings.buildSolarSiphon(keyLabel("buildSolarSiphon")),
         strings.solarSiphonInfo,
       )}
       <span class="divider" />
       {buildButton(
         "shieldGenerator",
-        strings.buildShield(KEYMAP.buildShield.toUpperCase()),
+        strings.buildShield(keyLabel("buildShield")),
         strings.shieldInfo,
       )}
       {buildButton(
         "orbitalDefense",
-        strings.buildOrbitalDefense(KEYMAP.buildOrbitalDefense.toUpperCase()),
+        strings.buildOrbitalDefense(keyLabel("buildOrbitalDefense")),
         strings.orbitalDefenseInfo,
       )}
       {buildButton(
         "warship",
-        strings.launchWarship(KEYMAP.launchWarship.toUpperCase()),
+        strings.launchWarship(keyLabel("launchWarship")),
         strings.warshipInfo,
         "port",
       )}
       {buildButton(
         "launchSilo",
-        strings.buildLaunchSilo(KEYMAP.buildLaunchSilo.toUpperCase()),
+        strings.buildLaunchSilo(keyLabel("buildLaunchSilo")),
         strings.launchSiloInfo,
       )}
       {buildButton(
         "kineticStrike",
-        strings.fireKinetic(KEYMAP.fireKinetic.toUpperCase()),
+        strings.fireKinetic(keyLabel("fireKinetic")),
         strings.kineticInfo,
         "silo",
       )}
       {buildButton(
         "antimatterWarhead",
-        strings.fireAntimatter(KEYMAP.fireAntimatter.toUpperCase()),
+        strings.fireAntimatter(keyLabel("fireAntimatter")),
         strings.antimatterInfo,
         "silo",
       )}
@@ -295,7 +291,7 @@ function StatsPanel({ me }: { me: FactionView }) {
       {ui.warships.value > 0 && (
         <Stat
           label={strings.warships}
-          value={`${ui.warships.value} · ${strings.nextWarship(KEYMAP.nextWarship.toUpperCase())}`}
+          value={`${ui.warships.value} · ${strings.nextWarship(keyLabel("nextWarship"))}`}
         />
       )}
       {(me.coronaTiles > 0 || me.coronaTroops > 0) && (

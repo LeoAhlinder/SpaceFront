@@ -2,11 +2,17 @@ import { Container, Graphics, Text } from "pixi.js";
 import { SOLAR_SYSTEM } from "../../data/bodies";
 import type { MatchInit } from "../../shared/messages";
 import { BALANCE } from "../../data/balance";
+import type { Quality } from "../settings";
 import { mainOwner, ui, view } from "../store/clientStore";
+import type { Atlas } from "./atlas";
+import type { SpriteName } from "./atlasFrames";
+import { ATLAS_FRAMES } from "./atlasFrames";
 import { Camera } from "./camera";
-import { BODY_COLORS, mix } from "./colors";
+import { mix } from "./colors";
 import { CoronaLayer, coronaTileAt, coronaTileCenter } from "./coronaLayer";
 import { alongPath, bodyPos } from "./orbits";
+import { drawFlame } from "./planetScene";
+import { SpriteLayer } from "./spriteLayer";
 
 /** Space units the system view frames when opened (Neptune's orbit plus margin). */
 const SYSTEM_EXTENT = 20_000;
@@ -21,22 +27,36 @@ const WEAPON_COLOR = 0xff5a3c;
 
 /**
  * The solar-system view: the Sun, the Corona's territory around it, orbits,
- * every body as an icon (tinted by the faction owning most of it) and ships
- * in flight. The shapes are redrawn every frame (a few dozen, plus Corona
- * structures); the Corona's territory is a texture updated per changed tile.
+ * every body as an icon (tinted toward the faction owning most of it) and
+ * ships in flight. Sprites come from the atlas and are pooled; orbits,
+ * routes and beams are lines redrawn every frame; the Corona's territory is
+ * a texture updated per changed tile.
  */
 export class SystemScene {
   readonly container = new Container();
   readonly camera: Camera;
   private readonly world = new Container();
+  /** Orbits, routes and beams, under the sprites. */
   private readonly gfx = new Graphics();
+  private readonly sprites: SpriteLayer;
+  private readonly fx: SpriteLayer;
+  /** Selection rings and health bars, over the sprites. */
+  private readonly top = new Graphics();
   private readonly labels = new Map<string, Text>();
+  /** The last heading of each Warship, so a stopped one keeps facing the same way. */
+  private readonly headings = new Map<number, number>();
   private corona: CoronaLayer | null = null;
 
-  constructor() {
+  constructor(
+    atlas: Atlas,
+    private readonly quality: Quality,
+  ) {
     // From the whole system down to the Corona's tiles.
     this.camera = new Camera(this.world, 0.01, 6);
-    this.world.addChild(this.gfx);
+    this.sprites = new SpriteLayer(atlas);
+    this.fx = new SpriteLayer(atlas);
+    this.fx.container.blendMode = "add";
+    this.world.addChild(this.gfx, this.fx.container, this.sprites.container, this.top);
     for (const body of SOLAR_SYSTEM) {
       const label = new Text({ text: body.name, style: LABEL_STYLE });
       label.anchor.set(0.5, 0);
@@ -54,6 +74,7 @@ export class SystemScene {
   setMatch(init: MatchInit): void {
     this.corona?.destroy();
     this.corona = null;
+    this.headings.clear();
     if (!init.corona) return;
     this.corona = new CoronaLayer(
       init.corona,
@@ -74,6 +95,11 @@ export class SystemScene {
   /** Draws everything at fractional tick `t`. */
   draw(t: number): void {
     const g = this.gfx.clear();
+    const top = this.top.clear();
+    const sp = this.sprites;
+    const fx = this.fx;
+    sp.begin();
+    fx.begin();
     const zoom = this.camera.zoom;
     const px = 1 / zoom; // one screen pixel in world units
 
@@ -88,29 +114,30 @@ export class SystemScene {
       });
     }
 
-    // The Sun and its heat zone.
+    // The Sun, its glow and heat zone.
     const sun = SOLAR_SYSTEM[0]!;
-    g.circle(0, 0, sun.avoidRadius).fill({ color: 0xff9a30, alpha: 0.08 });
-    g.circle(0, 0, sun.radius).fill(BODY_COLORS["sun"] ?? 0xffc94a);
+    g.circle(0, 0, sun.avoidRadius).fill({ color: 0xff9a30, alpha: 0.06 });
+    fx.add("glow", 0, 0, sun.avoidRadius * 2.4, 0xff9a30, 0.35 + 0.05 * Math.sin(t * 0.05));
+    planetSprite(sp, "sun", 0, 0, sun.radius);
 
-    // Bodies.
+    // Bodies: their icon, tinted toward the owner of most of their land, and a ring in its color.
     const gridOf = new Map(view.init?.grids.map((gr) => [gr.bodyId, gr.id]) ?? []);
     for (const body of SOLAR_SYSTEM) {
       if (body.kind === "star") continue;
       const p = bodyPos(body.id, t);
       const r = Math.max(body.radius, MIN_ICON_PX * px);
-      let color = BODY_COLORS[body.id] ?? 0x999999;
       const grid = gridOf.get(body.id);
       const owned = grid === undefined ? null : mainOwner(grid);
+      let tint = 0xffffff;
       if (owned) {
-        const ownerColor = view.factions.get(owned.owner)?.color ?? color;
+        const ownerColor = view.factions.get(owned.owner)?.color ?? 0xffffff;
         g.circle(p.x, p.y, r + 3 * px).stroke({ width: 2.5 * px, color: ownerColor });
-        color = mix(color, ownerColor, Math.min(0.6, owned.share));
+        tint = mix(0xffffff, ownerColor, Math.min(0.5, owned.share));
       }
       if (body.kind === "gasGiant") {
         g.circle(p.x, p.y, body.avoidRadius).fill({ color: 0xffffff, alpha: 0.03 });
       }
-      g.circle(p.x, p.y, r).fill(color);
+      if (body.id in ATLAS_FRAMES) planetSprite(sp, body.id as SpriteName, p.x, p.y, r, tint);
       const label = this.labels.get(body.id)!;
       label.position.set(p.x, p.y + r + 4 * px);
       label.scale.set(px);
@@ -121,26 +148,29 @@ export class SystemScene {
     sunLabel.position.set(0, sun.radius + 4 * px);
     sunLabel.scale.set(px);
 
-    this.drawCoronaStructures(g, px);
+    this.drawCoronaStructures(sp, px, t);
+    this.drawWarships(g, top, sp, fx, px, t);
 
-    this.drawWarships(g, px, t);
-
-    // Ships between worlds.
+    // Ships between worlds, pointing where they fly.
     for (const ship of view.ships.values()) {
       if (ship.waypoints.length === 0) continue;
       const f = (t - ship.launchTick) / Math.max(1, ship.arriveTick - ship.launchTick);
       const p = alongPath(ship.waypoints, f);
+      const back = alongPath(ship.waypoints, Math.max(0, f - 0.02));
+      const heading =
+        p.x === back.x && p.y === back.y ? 0 : Math.atan2(p.y - back.y, p.x - back.x) + Math.PI / 2;
       const color = view.factions.get(ship.owner)?.color ?? 0xffffff;
       if (ship.kind === "kineticStrike" || ship.kind === "antimatterWarhead") {
         // A weapon: a hot streak with a fading trail behind it.
         const big = ship.kind === "antimatterWarhead";
-        const back = alongPath(ship.waypoints, Math.max(0, f - 0.12));
-        g.moveTo(back.x, back.y)
+        const tail = alongPath(ship.waypoints, Math.max(0, f - 0.12));
+        g.moveTo(tail.x, tail.y)
           .lineTo(p.x, p.y)
           .stroke({ width: (big ? 3 : 2) * px, color: WEAPON_COLOR, alpha: 0.55 });
-        g.circle(p.x, p.y, (big ? 5 : 3) * px)
-          .fill(0xfff1c0)
-          .stroke({ width: px, color: WEAPON_COLOR });
+        const size = (big ? 20 : 15) * px;
+        fx.add("glow", p.x, p.y, size * 1.6, big ? 0xff60e0 : WEAPON_COLOR, 0.7);
+        drawFlame(fx, p.x, p.y, size, heading);
+        sp.add(ship.kind, p.x, p.y, size, 0xffffff, 1, heading);
         continue;
       }
       if (ship.owner === view.init?.playerId && ship.kind !== "freighter") {
@@ -150,25 +180,25 @@ export class SystemScene {
           .lineTo(ship.waypoints[end]!, ship.waypoints[end + 1]!)
           .stroke({ width: px, color, alpha: 0.35 });
       }
-      if (ship.kind === "freighter") {
-        // Freighters: small dim squares, so landers stand out.
-        g.rect(p.x - 2 * px, p.y - 2 * px, 4 * px, 4 * px).fill({ color, alpha: 0.7 });
-      } else if (ship.kind === "sunBaseShip") {
-        // Sun Base ships: a diamond carrying the base.
-        const r = 6 * px;
-        g.poly([p.x, p.y - r, p.x + r, p.y, p.x, p.y + r, p.x - r, p.y])
-          .fill(color)
-          .stroke({ width: px, color: 0xffe08a });
-      } else {
-        g.circle(p.x, p.y, 4 * px)
-          .fill(color)
-          .stroke({ width: px, color: 0x000000 });
+      const size = (ship.kind === "freighter" ? 11 : ship.kind === "sunBaseShip" ? 20 : 16) * px;
+      if (ship.kind !== "freighter" || this.quality === "high") {
+        drawFlame(fx, p.x, p.y, size, heading);
       }
+      sp.add(ship.kind, p.x, p.y, size, color, ship.kind === "freighter" ? 0.85 : 1, heading);
     }
+    sp.end();
+    fx.end();
   }
 
-  /** Warships (triangles heading where they move), the selected one's patrol area, and effects. */
-  private drawWarships(g: Graphics, px: number, t: number): void {
+  /** Warships (pointing where they move), the selected one's patrol area, and combat effects. */
+  private drawWarships(
+    g: Graphics,
+    top: Graphics,
+    sp: SpriteLayer,
+    fx: SpriteLayer,
+    px: number,
+    t: number,
+  ): void {
     const frac = Math.min(1, Math.max(0, t - ui.tick.value));
     const me = view.init?.playerId;
     const selected = ui.selectedWarship.value;
@@ -176,45 +206,48 @@ export class SystemScene {
       const x = w.prevX + (w.x - w.prevX) * frac;
       const y = w.prevY + (w.y - w.prevY) * frac;
       const color = view.factions.get(w.owner)?.color ?? 0xffffff;
-      let dx = w.x - w.prevX;
-      let dy = w.y - w.prevY;
-      const len = Math.hypot(dx, dy) || 1;
-      dx = len === 1 && dx === 0 ? 1 : dx / len;
-      dy /= len;
-      const r = 7 * px;
-      g.poly([
-        x + dx * r * 1.4,
-        y + dy * r * 1.4,
-        x - dx * r - dy * r * 0.8,
-        y - dy * r + dx * r * 0.8,
-        x - dx * r + dy * r * 0.8,
-        y - dy * r - dx * r * 0.8,
-      ])
-        .fill(color)
-        .stroke({ width: px, color: w.owner === me ? 0xffffff : 0x000000 });
+      const dx = w.x - w.prevX;
+      const dy = w.y - w.prevY;
+      const moving = dx !== 0 || dy !== 0;
+      const heading = moving ? Math.atan2(dy, dx) + Math.PI / 2 : (this.headings.get(w.id) ?? 0);
+      this.headings.set(w.id, heading);
+      const size = 22 * px;
+      if (moving) drawFlame(fx, x, y, size * 0.8, heading);
+      sp.add("warship", x, y, size, color, 1, heading);
+      if (w.owner === me) {
+        top.circle(x, y, size * 0.62).stroke({ width: px, color: 0xffffff, alpha: 0.5 });
+      }
       if (w.hp < BALANCE.hp.warship) {
         const share = Math.max(0, w.hp / BALANCE.hp.warship);
-        g.rect(x - r, y + r * 1.3, 2 * r * share, 2 * px).fill(0x6be37a);
+        const r = size / 2;
+        top.rect(x - r, y + r * 1.1, 2 * r, 2.5 * px).fill({ color: 0x000000, alpha: 0.6 });
+        top.rect(x - r, y + r * 1.1, 2 * r * share, 2.5 * px).fill(0x6be37a);
       }
       if (w.id === selected) {
-        g.circle(x, y, r * 2).stroke({ width: 1.5 * px, color: 0xffffff });
+        top.circle(x, y, size).stroke({ width: 1.5 * px, color: 0xffffff });
         g.circle(x, y, BALANCE.warship.detectRange).stroke({ width: px, color, alpha: 0.4 });
       }
+    }
+    if (this.headings.size > view.warships.size * 2 + 16) {
+      for (const id of this.headings.keys()) if (!view.warships.has(id)) this.headings.delete(id);
     }
     for (const e of view.effects) {
       const age = (t - e.tick) / Math.max(1, e.untilTick - e.tick);
       if (age < 0 || age > 1) continue;
-      const fx = e.effect;
-      if (fx.kind === "beam") {
-        const color = view.factions.get(fx.owner)?.color ?? 0xffffff;
-        g.moveTo(fx.fromX, fx.fromY)
-          .lineTo(fx.toX, fx.toY)
-          .stroke({ width: 2 * px, color: mix(color, 0xffffff, 0.5), alpha: 1 - age });
-      } else if (fx.kind === "blast") {
-        g.circle(fx.x, fx.y, (6 + 14 * fx.size * age) * px).fill({
-          color: 0xffb040,
-          alpha: 0.8 * (1 - age),
-        });
+      const effect = e.effect;
+      if (effect.kind === "beam") {
+        const color = mix(view.factions.get(effect.owner)?.color ?? 0xffffff, 0xffffff, 0.5);
+        g.moveTo(effect.fromX, effect.fromY)
+          .lineTo(effect.toX, effect.toY)
+          .stroke({ width: 2 * px, color, alpha: 1 - age });
+        fx.add("glow", effect.toX, effect.toY, 10 * px, color, 1 - age);
+      } else if (effect.kind === "blast") {
+        const s = (14 + 30 * effect.size * age) * px;
+        fx.add("glow", effect.x, effect.y, s * 1.6, 0xffa040, 1 - age);
+        fx.add("ring", effect.x, effect.y, s, 0xfff1c0, 0.8 * (1 - age));
+        if (age < 0.4 && this.quality === "high") {
+          fx.add("spark", effect.x, effect.y, s * 0.9, 0xffffff, 1 - age / 0.4, age * 3);
+        }
       }
     }
   }
@@ -237,38 +270,22 @@ export class SystemScene {
   }
 
   /** Sun Bases and Solar Siphons, drawn on their Corona tiles. */
-  private drawCoronaStructures(g: Graphics, px: number): void {
+  private drawCoronaStructures(sp: SpriteLayer, px: number, t: number): void {
     const info = view.init?.corona;
     if (!info) return;
-    const size = Math.max(CORONA_STRUCTURE_SIZE, 7 * px);
-    const half = size / 2;
-    const outline = { width: Math.max(1, 1.5 * px), color: 0xffffff };
+    const size = Math.max(CORONA_STRUCTURE_SIZE, 12 * px);
     for (const s of view.structures.values()) {
       if (s.grid !== info.id) continue;
       const p = coronaTileCenter(info, s.tile);
       const color = view.factions.get(s.owner)?.color ?? 0x888888;
-      const alpha = s.buildTicksLeft > 0 ? 0.45 : 1;
+      const alpha = s.buildTicksLeft > 0 ? 0.5 : 1;
       if (s.kind === "sunBase") {
-        // A square with a sun-colored core: the base.
-        g.rect(p.x - half, p.y - half, size, size)
-          .fill({ color, alpha })
-          .stroke(outline);
-        g.circle(p.x, p.y, size / 5).fill(0xffd040);
+        sp.add("sunBase", p.x, p.y, size * 1.2, color, alpha, t * 0.01);
+        sp.add("sunBaseGlow", p.x, p.y, size * 1.2);
       } else {
-        // A triangle pointing at the Sun: the siphon.
-        const len = Math.hypot(p.x, p.y) || 1;
-        const ux = -p.x / len;
-        const uy = -p.y / len;
-        g.poly([
-          p.x + ux * half,
-          p.y + uy * half,
-          p.x - ux * half - uy * half,
-          p.y - uy * half + ux * half,
-          p.x - ux * half + uy * half,
-          p.y - uy * half - ux * half,
-        ])
-          .fill({ color, alpha })
-          .stroke(outline);
+        // The dish faces the Sun.
+        const facing = Math.atan2(-p.y, -p.x) + Math.PI / 2;
+        sp.add("solarSiphon", p.x, p.y, size, color, alpha, facing);
       }
     }
   }
@@ -297,4 +314,17 @@ export class SystemScene {
     }
     return best?.grid ?? null;
   }
+}
+
+/** A planet icon whose disc has radius `r` in world units. */
+function planetSprite(
+  sp: SpriteLayer,
+  name: SpriteName,
+  x: number,
+  y: number,
+  r: number,
+  tint = 0xffffff,
+): void {
+  const frame: { size: number; radius?: number } = ATLAS_FRAMES[name];
+  sp.add(name, x, y, (r * frame.size) / (frame.radius ?? frame.size / 2), tint);
 }

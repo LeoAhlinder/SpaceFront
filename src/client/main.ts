@@ -1,11 +1,15 @@
+import { effect } from "@preact/signals";
 import { h, render } from "preact";
 import { log } from "../shared/log";
 import { createActions } from "./actions";
+import { audio } from "./audio/audio";
+import { attachClickSounds, createGameSounds } from "./audio/gameSounds";
 import { SimBridge } from "./bridge/simBridge";
 import { attachKeys } from "./input/keymap";
 import { attachPointer } from "./input/pointer";
 import { GameRenderer } from "./render/renderer";
-import { applyWorkerMessage, ui } from "./store/clientStore";
+import { settings } from "./settings";
+import { applyWorkerMessage, ui, view } from "./store/clientStore";
 import { App } from "./ui/App";
 
 function element(id: string): HTMLElement {
@@ -15,14 +19,29 @@ function element(id: string): HTMLElement {
 }
 
 async function main(): Promise<void> {
-  const renderer = await GameRenderer.create(element("game"));
+  const renderer = await GameRenderer.create(element("game"), settings.value.quality);
   const bridge = new SimBridge();
   const actions = createActions(bridge);
+  const sounds = createGameSounds();
 
   bridge.onMessage((message) => {
     applyWorkerMessage(message);
     if (message.type === "init") renderer.setMatch(message.init);
+    sounds(message);
   });
+
+  // Browsers start audio only after a user gesture.
+  const unlock = () => audio.unlock();
+  window.addEventListener("pointerdown", unlock);
+  window.addEventListener("keydown", unlock);
+  effect(() => {
+    const s = settings.value;
+    audio.setVolumes(s.masterVolume, s.musicVolume, s.sfxVolume);
+  });
+  effect(() => {
+    if (ui.phase.value === "menu") audio.playMusic("menu");
+  });
+  attachClickSounds(element("ui"));
 
   attachPointer(
     renderer.canvas,
@@ -79,6 +98,24 @@ async function main(): Promise<void> {
     fireKinetic: () => actions.toggleMode("kineticStrike"),
     fireAntimatter: () => actions.toggleMode("antimatterWarhead"),
   });
+
+  if (import.meta.env.DEV) {
+    // Dev builds only: a handle for play-testing and browser tests.
+    (window as unknown as Record<string, unknown>)["spacefront"] = { ui, view, actions, renderer };
+  }
+
+  if (import.meta.env.DEV && new URLSearchParams(location.search).has("perf")) {
+    // Dev-only: frame and tick costs in the console every 5 seconds.
+    setInterval(() => {
+      const s = renderer.frameStats;
+      log.info(
+        `render: ${(s.totalMs / Math.max(1, s.frames)).toFixed(2)} ms avg, ${s.worstMs.toFixed(1)} ms worst over ${s.frames} frames`,
+      );
+      s.frames = 0;
+      s.totalMs = 0;
+      s.worstMs = 0;
+    }, 5000);
+  }
 
   render(h(App, { actions }), element("ui"));
 }
