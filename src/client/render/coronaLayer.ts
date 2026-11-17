@@ -3,8 +3,6 @@ import { BALANCE } from "../../data/balance";
 import type { CoronaInit } from "../../shared/messages";
 import { mix } from "./colors";
 
-/** Texture side in pixels; the texture spans the Corona's outer diameter. */
-const TEXTURE_PX = 1024;
 /** Neutral Corona colors per band (inner, middle, outer): hotter toward the Sun. */
 const BAND_COLORS = [0xffb040, 0xd8702a, 0x8a3c22];
 /** How strongly an owner's color tints its Corona tiles (0–1). */
@@ -56,13 +54,17 @@ export class CoronaLayer {
   /** Pixels of tile t are pixelList[pixelStart[t] .. pixelStart[t + 1]). */
   private readonly pixelStart: Int32Array;
   private readonly pixelList: Int32Array;
+  /** Pixels changed since the last upload to the GPU. */
+  private stale = false;
 
   constructor(
     private readonly info: CoronaInit,
     private readonly owners: Uint16Array,
     private readonly colorOf: (owner: number) => number,
+    /** Texture side in pixels (it spans the Corona's outer diameter); lower on low quality. */
+    texturePx: number,
   ) {
-    const n = TEXTURE_PX;
+    const n = texturePx;
     const size = info.rings * info.sectors;
     const units = (2 * CORONA_OUTER) / n;
     const tileOf = new Int32Array(n * n);
@@ -102,7 +104,10 @@ export class CoronaLayer {
     this.source.update();
   }
 
-  /** Redraws the given tiles and their neighbors (whose borders may have changed). */
+  /**
+   * Redraws the given tiles and their neighbors (whose borders may have
+   * changed) in memory; `flush()` uploads the texture, only while it's seen.
+   */
   redraw(tiles: readonly number[]): void {
     const s = this.info.sectors;
     for (const tile of tiles) {
@@ -114,6 +119,13 @@ export class CoronaLayer {
       if (tile >= s) this.paint(tile - s);
       if (tile + s < this.owners.length) this.paint(tile + s);
     }
+    this.stale = true;
+  }
+
+  /** Uploads the texture if any pixels changed since the last upload. */
+  flush(): void {
+    if (!this.stale) return;
+    this.stale = false;
     this.source.update();
   }
 

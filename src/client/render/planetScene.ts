@@ -1,4 +1,5 @@
 import { Container, Graphics } from "pixi.js";
+import type { StructureView } from "../../core";
 import type { MatchInit } from "../../shared/messages";
 import { BALANCE } from "../../data/balance";
 import { view } from "../store/clientStore";
@@ -44,6 +45,9 @@ export class PlanetScene {
   private readonly fx: SpriteLayer;
   private active = -1;
   private fitZoom = 1;
+  /** Structures per grid, rebuilt only when structures change (thousands late in a match). */
+  private structuresByGrid: StructureView[][] = [];
+  private structuresVersion = -1;
 
   constructor(atlas: Atlas) {
     this.camera = new Camera(this.world);
@@ -78,6 +82,7 @@ export class PlanetScene {
     this.layers.forEach((layer, i) => (layer.sprite.visible = i === grid));
     this.active = grid;
     const layer = this.layers[grid];
+    layer?.flush();
     if (layer) {
       this.camera.fit(layer.width, layer.height, screenW, screenH);
       this.fitZoom = this.camera.zoom;
@@ -87,6 +92,15 @@ export class PlanetScene {
   /** True once the player has zoomed far enough out to leave this map. */
   get zoomedOut(): boolean {
     return this.camera.zoom < this.fitZoom * EXIT_ZOOM_SHARE;
+  }
+
+  private screenW = 0;
+  private screenH = 0;
+
+  /** The screen size, for culling sprites outside it. */
+  resize(width: number, height: number): void {
+    this.screenW = width;
+    this.screenH = height;
   }
 
   /** Updates changed tiles on every map and redraws structures and ships at tick `t`. */
@@ -100,6 +114,8 @@ export class PlanetScene {
     });
     if (!visible) return;
     const layer = this.layers[this.active];
+    // Only the map on screen goes to the GPU; the others upload when shown.
+    layer?.flush();
     const g = this.under.clear();
     const sp = this.sprites;
     const fx = this.fx;
@@ -123,11 +139,20 @@ export class PlanetScene {
     const toY = (tile: number) => Math.floor(tile / w) + 0.5 - h / 2;
     const px = 1 / this.camera.zoom;
     const size = Math.max(STRUCTURE_TILES, MIN_STRUCTURE_PX * px);
+    // The part of the map on screen (plus a margin): sprites outside it are skipped.
+    const a = this.camera.screenToWorld(-size / px, -size / px);
+    const b = this.camera.screenToWorld(this.screenW + size / px, this.screenH + size / px);
+    const onScreen = (x: number, y: number) => x >= a.x && x <= b.x && y >= a.y && y <= b.y;
 
-    for (const s of view.structures.values()) {
-      if (s.grid !== this.active) continue;
+    if (this.structuresVersion !== view.structuresVersion) {
+      this.structuresVersion = view.structuresVersion;
+      this.structuresByGrid = this.layers.map(() => []);
+      for (const st of view.structures.values()) this.structuresByGrid[st.grid]?.push(st);
+    }
+    for (const s of this.structuresByGrid[this.active] ?? []) {
       const x = toX(s.tile);
       const y = toY(s.tile);
+      if (!onScreen(x, y)) continue;
       const color = view.factions.get(s.owner)?.color ?? 0xffffff;
       const building = s.buildTicksLeft > 0;
       sp.add(STRUCTURE_SPRITES[s.kind] ?? "habitat", x, y, size, color, building ? 0.5 : 1);

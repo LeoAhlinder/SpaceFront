@@ -196,6 +196,8 @@ export const view = {
   /** Per grid: ownable tiles. */
   ownable: [] as number[],
   structures: new Map<number, StructureView>(),
+  /** Goes up whenever `structures` changes, so the renderer can cache lists made from it. */
+  structuresVersion: 0,
   ships: new Map<number, ShipView>(),
   warships: new Map<number, WarshipView>(),
   effects: [] as EffectView[],
@@ -270,6 +272,7 @@ function applyInit(init: MatchInit): void {
     return counts;
   });
   view.structures = new Map(init.snapshot.structures.map((s) => [s.id, s]));
+  view.structuresVersion++;
   view.ships = new Map(init.snapshot.ships.map((s) => [s.id, s]));
   view.warships = new Map();
   view.effects = [];
@@ -354,6 +357,7 @@ function applyDelta(delta: TickDelta): void {
     if (s.destroyed) view.structures.delete(s.id);
     else view.structures.set(s.id, s);
   }
+  if (delta.structures.length > 0) view.structuresVersion++;
   if (delta.structures.length > 0 || delta.tick % 10 === 0) countStructures(delta.tick);
   applyWarships(delta.warships);
   for (const effect of delta.effects) addEffect(effect, delta.tick);

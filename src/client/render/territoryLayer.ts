@@ -20,6 +20,8 @@ export class TerritoryLayer {
   readonly height: number;
   private readonly pixels: Uint8Array;
   private readonly source: BufferImageSource;
+  /** Pixels changed since the texture was last uploaded to the GPU. */
+  private stale = false;
 
   constructor(
     private readonly grid: GridInit,
@@ -43,7 +45,12 @@ export class TerritoryLayer {
     this.source.update();
   }
 
-  /** Redraws the given tiles and their neighbors, then re-uploads the texture. */
+  /**
+   * Redraws the given tiles and their neighbors in memory. The texture is
+   * uploaded by `flush()`, only for the map on screen: uploading every
+   * world's map whenever its land changed was the biggest cost in the
+   * system view on slow machines.
+   */
   redraw(tiles: readonly number[]): void {
     const w = this.width;
     for (const tile of tiles) {
@@ -54,6 +61,13 @@ export class TerritoryLayer {
       if (x > 0) this.paint(tile - 1);
       if (x < w - 1) this.paint(tile + 1);
     }
+    this.stale = true;
+  }
+
+  /** Uploads the texture if any pixels changed since the last upload. */
+  flush(): void {
+    if (!this.stale) return;
+    this.stale = false;
     this.source.update();
   }
 

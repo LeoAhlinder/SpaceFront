@@ -1,5 +1,6 @@
 import { Container, Graphics, Text } from "pixi.js";
 import { SOLAR_SYSTEM } from "../../data/bodies";
+import type { StructureView } from "../../core";
 import type { MatchInit } from "../../shared/messages";
 import { BALANCE } from "../../data/balance";
 import type { Quality } from "../settings";
@@ -10,7 +11,8 @@ import { ATLAS_FRAMES } from "./atlasFrames";
 import { Camera } from "./camera";
 import { mix } from "./colors";
 import { CoronaLayer, coronaTileAt, coronaTileCenter } from "./coronaLayer";
-import { alongPath, bodyPos } from "./orbits";
+import type { PathSample } from "./orbits";
+import { bodyPos, PathCache } from "./orbits";
 import { drawFlame } from "./planetScene";
 import { SpriteLayer } from "./spriteLayer";
 
@@ -46,6 +48,13 @@ export class SystemScene {
   /** The last heading of each Warship, so a stopped one keeps facing the same way. */
   private readonly headings = new Map<number, number>();
   private corona: CoronaLayer | null = null;
+  /** Moon orbits and gas giants' keep-out zones: built once, moved with their body each frame. */
+  private readonly followers: { readonly gfx: Graphics; readonly bodyId: string }[] = [];
+  private readonly paths = new PathCache();
+  private readonly sample: PathSample = { x: 0, y: 0, dx: 0, dy: -1 };
+  /** Sun Bases and siphons (the Corona's structures), rebuilt when structures change. */
+  private coronaStructures: StructureView[] = [];
+  private coronaVersion = -1;
 
   constructor(
     atlas: Atlas,
@@ -56,7 +65,13 @@ export class SystemScene {
     this.sprites = new SpriteLayer(atlas);
     this.fx = new SpriteLayer(atlas);
     this.fx.container.blendMode = "add";
-    this.world.addChild(this.gfx, this.fx.container, this.sprites.container, this.top);
+    this.world.addChild(
+      this.staticOrbits(),
+      this.gfx,
+      this.fx.container,
+      this.sprites.container,
+      this.top,
+    );
     for (const body of SOLAR_SYSTEM) {
       const label = new Text({ text: body.name, style: LABEL_STYLE });
       label.anchor.set(0.5, 0);
@@ -64,6 +79,43 @@ export class SystemScene {
       this.world.addChild(label);
     }
     this.container.addChild(this.world);
+  }
+
+  /**
+   * Orbits around the Sun and its heat zone never change: drawn once, with
+   * 1-pixel lines at any zoom. Moon orbits and keep-out zones are drawn once
+   * around (0, 0) and moved to their body every frame. Rebuilding these
+   * shapes every frame was the biggest cost in the system view.
+   */
+  private staticOrbits(): Container {
+    const layer = new Container();
+    const fixed = new Graphics();
+    const sun = SOLAR_SYSTEM[0]!;
+    fixed.circle(0, 0, sun.avoidRadius).fill({ color: 0xff9a30, alpha: 0.06 });
+    for (const body of SOLAR_SYSTEM) {
+      if (body.orbitTicks === 0) continue;
+      if (!body.parent) {
+        fixed
+          .circle(0, 0, body.orbitRadius)
+          .stroke({ color: 0x4a5680, alpha: 0.5, pixelLine: true });
+        continue;
+      }
+      const moon = new Graphics()
+        .circle(0, 0, body.orbitRadius)
+        .stroke({ color: 0x4a5680, alpha: 0.35, pixelLine: true });
+      this.followers.push({ gfx: moon, bodyId: body.parent });
+      layer.addChild(moon);
+    }
+    for (const body of SOLAR_SYSTEM) {
+      if (body.kind !== "gasGiant") continue;
+      const zone = new Graphics()
+        .circle(0, 0, body.avoidRadius)
+        .fill({ color: 0xffffff, alpha: 0.03 });
+      this.followers.push({ gfx: zone, bodyId: body.id });
+      layer.addChild(zone);
+    }
+    layer.addChildAt(fixed, 0);
+    return layer;
   }
 
   fit(screenW: number, screenH: number): void {
@@ -80,16 +132,23 @@ export class SystemScene {
       init.corona,
       view.owners[init.corona.id]!,
       (owner) => view.factions.get(owner)?.color ?? 0,
+      this.quality === "high" ? 1024 : 512,
     );
     this.world.addChildAt(this.corona.sprite, 0);
   }
 
-  /** Applies Corona tile changes. Runs every frame, even while another view is shown. */
-  updateCorona(): void {
+  /**
+   * Applies Corona tile changes. Runs every frame, even while another view is
+   * shown; the texture goes to the GPU only while the system view is `visible`.
+   */
+  updateCorona(visible: boolean): void {
     const dirty = view.dirty[view.coronaGrid];
-    if (!this.corona || !dirty || dirty.length === 0) return;
-    this.corona.redraw(dirty);
-    dirty.length = 0;
+    if (!this.corona) return;
+    if (dirty && dirty.length > 0) {
+      this.corona.redraw(dirty);
+      dirty.length = 0;
+    }
+    if (visible) this.corona.flush();
   }
 
   /** Draws everything at fractional tick `t`. */
@@ -103,20 +162,13 @@ export class SystemScene {
     const zoom = this.camera.zoom;
     const px = 1 / zoom; // one screen pixel in world units
 
-    // Orbits.
-    for (const body of SOLAR_SYSTEM) {
-      if (body.orbitTicks === 0) continue;
-      const center = body.parent ? bodyPos(body.parent, t) : { x: 0, y: 0 };
-      g.circle(center.x, center.y, body.orbitRadius).stroke({
-        width: px,
-        color: 0x4a5680,
-        alpha: body.parent ? 0.35 : 0.5,
-      });
+    for (const f of this.followers) {
+      const p = bodyPos(f.bodyId, t);
+      f.gfx.position.set(p.x, p.y);
     }
 
-    // The Sun, its glow and heat zone.
+    // The Sun and its glow.
     const sun = SOLAR_SYSTEM[0]!;
-    g.circle(0, 0, sun.avoidRadius).fill({ color: 0xff9a30, alpha: 0.06 });
     fx.add("glow", 0, 0, sun.avoidRadius * 2.4, 0xff9a30, 0.35 + 0.05 * Math.sin(t * 0.05));
     planetSprite(sp, "sun", 0, 0, sun.radius);
 
@@ -131,11 +183,9 @@ export class SystemScene {
       let tint = 0xffffff;
       if (owned) {
         const ownerColor = view.factions.get(owned.owner)?.color ?? 0xffffff;
-        g.circle(p.x, p.y, r + 3 * px).stroke({ width: 2.5 * px, color: ownerColor });
+        // The atlas ring (radius 28 of its 64-pixel frame), cheaper than a new circle each frame.
+        sp.add("ring", p.x, p.y, ((r + 3 * px) * 64) / 28, ownerColor);
         tint = mix(0xffffff, ownerColor, Math.min(0.5, owned.share));
-      }
-      if (body.kind === "gasGiant") {
-        g.circle(p.x, p.y, body.avoidRadius).fill({ color: 0xffffff, alpha: 0.03 });
       }
       if (body.id in ATLAS_FRAMES) planetSprite(sp, body.id as SpriteName, p.x, p.y, r, tint);
       const label = this.labels.get(body.id)!;
@@ -152,40 +202,41 @@ export class SystemScene {
     this.drawWarships(g, top, sp, fx, px, t);
 
     // Ships between worlds, pointing where they fly.
+    const q = this.sample;
     for (const ship of view.ships.values()) {
       if (ship.waypoints.length === 0) continue;
       const f = (t - ship.launchTick) / Math.max(1, ship.arriveTick - ship.launchTick);
-      const p = alongPath(ship.waypoints, f);
-      const back = alongPath(ship.waypoints, Math.max(0, f - 0.02));
-      const heading =
-        p.x === back.x && p.y === back.y ? 0 : Math.atan2(p.y - back.y, p.x - back.x) + Math.PI / 2;
+      this.paths.sample(ship.id, ship.waypoints, f, q);
+      const x = q.x;
+      const y = q.y;
+      const heading = Math.atan2(q.dy, q.dx) + Math.PI / 2;
       const color = view.factions.get(ship.owner)?.color ?? 0xffffff;
       if (ship.kind === "kineticStrike" || ship.kind === "antimatterWarhead") {
         // A weapon: a hot streak with a fading trail behind it.
         const big = ship.kind === "antimatterWarhead";
-        const tail = alongPath(ship.waypoints, Math.max(0, f - 0.12));
-        g.moveTo(tail.x, tail.y)
-          .lineTo(p.x, p.y)
+        this.paths.sample(ship.id, ship.waypoints, Math.max(0, f - 0.12), q);
+        g.moveTo(q.x, q.y)
+          .lineTo(x, y)
           .stroke({ width: (big ? 3 : 2) * px, color: WEAPON_COLOR, alpha: 0.55 });
         const size = (big ? 20 : 15) * px;
-        fx.add("glow", p.x, p.y, size * 1.6, big ? 0xff60e0 : WEAPON_COLOR, 0.7);
-        drawFlame(fx, p.x, p.y, size, heading);
-        sp.add(ship.kind, p.x, p.y, size, 0xffffff, 1, heading);
+        fx.add("glow", x, y, size * 1.6, big ? 0xff60e0 : WEAPON_COLOR, 0.7);
+        drawFlame(fx, x, y, size, heading);
+        sp.add(ship.kind, x, y, size, 0xffffff, 1, heading);
         continue;
       }
       if (ship.owner === view.init?.playerId && ship.kind !== "freighter") {
         // Show the player's own lander and Sun Base ship routes.
         const end = ship.waypoints.length - 2;
-        g.moveTo(p.x, p.y)
+        g.moveTo(x, y)
           .lineTo(ship.waypoints[end]!, ship.waypoints[end + 1]!)
           .stroke({ width: px, color, alpha: 0.35 });
       }
-      const size = (ship.kind === "freighter" ? 11 : ship.kind === "sunBaseShip" ? 20 : 16) * px;
-      if (ship.kind !== "freighter" || this.quality === "high") {
-        drawFlame(fx, p.x, p.y, size, heading);
-      }
-      sp.add(ship.kind, p.x, p.y, size, color, ship.kind === "freighter" ? 0.85 : 1, heading);
+      const freighter = ship.kind === "freighter";
+      const size = (freighter ? 11 : ship.kind === "sunBaseShip" ? 20 : 16) * px;
+      if (!freighter || this.quality === "high") drawFlame(fx, x, y, size, heading);
+      sp.add(ship.kind, x, y, size, color, freighter ? 0.85 : 1, heading);
     }
+    if (this.paths.size > view.ships.size * 2 + 64) this.paths.prune((id) => view.ships.has(id));
     sp.end();
     fx.end();
   }
@@ -274,8 +325,11 @@ export class SystemScene {
     const info = view.init?.corona;
     if (!info) return;
     const size = Math.max(CORONA_STRUCTURE_SIZE, 12 * px);
-    for (const s of view.structures.values()) {
-      if (s.grid !== info.id) continue;
+    if (this.coronaVersion !== view.structuresVersion) {
+      this.coronaVersion = view.structuresVersion;
+      this.coronaStructures = [...view.structures.values()].filter((s) => s.grid === info.id);
+    }
+    for (const s of this.coronaStructures) {
       const p = coronaTileCenter(info, s.tile);
       const color = view.factions.get(s.owner)?.color ?? 0x888888;
       const alpha = s.buildTicksLeft > 0 ? 0.5 : 1;

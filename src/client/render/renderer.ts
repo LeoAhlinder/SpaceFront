@@ -96,9 +96,10 @@ export class GameRenderer {
     this.system.container.visible = inMatch && inSystem;
     this.planet.container.visible = inMatch && !inSystem;
     if (inMatch) {
+      this.planet.resize(this.app.screen.width, this.app.screen.height);
       const t = this.now();
       this.planet.draw(t, !inSystem); // keeps every map's territory current even when hidden
-      this.system.updateCorona();
+      this.system.updateCorona(inSystem);
       if (inSystem) this.system.draw(t);
     }
     const ms = performance.now() - started;

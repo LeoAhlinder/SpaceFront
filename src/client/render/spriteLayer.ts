@@ -9,7 +9,8 @@ import { ATLAS_FRAMES } from "./atlasFrames";
  * sprite to show, then `end()` to hide whatever wasn't used this frame.
  */
 export class SpriteLayer {
-  readonly container = new Container();
+  // Its own render group: sprites shown and hidden as counts change only rebuild this layer.
+  readonly container = new Container({ isRenderGroup: true });
   private readonly pool: Sprite[] = [];
   private used = 0;
 
@@ -41,14 +42,17 @@ export class SpriteLayer {
       this.container.addChild(s);
     }
     this.used++;
-    s.texture = this.atlas.texture(name);
-    s.visible = true;
+    // Setters below update Pixi's internal state, so only touch what changed
+    // (hundreds of sprites are placed every frame late in a match).
+    const texture = this.atlas.texture(name);
+    if (s.texture !== texture) s.texture = texture;
+    if (!s.visible) s.visible = true;
     s.position.set(x, y);
     const scale = size / ATLAS_FRAMES[name].size;
-    s.scale.set(scale);
-    s.tint = tint;
-    s.alpha = alpha;
-    s.rotation = rotation;
+    if (s.scale.x !== scale) s.scale.set(scale);
+    if (s.tint !== tint) s.tint = tint;
+    if (s.alpha !== alpha) s.alpha = alpha;
+    if (s.rotation !== rotation) s.rotation = rotation;
     return s;
   }
 
