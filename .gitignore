@@ -11,3 +11,7 @@ test-results/
 playwright-report/
 desktop/web/
 desktop/release/
+*.pem
+*.tsbuildinfo
+.eslintcache
+.cache/
